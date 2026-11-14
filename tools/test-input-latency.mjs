@@ -17,6 +17,20 @@ core.FS.unlink('flash.img'); core.FS.unlink('state.snap'); core._fb_release();
 const pixels = core._malloc(320 * 240 * 4);
 const source = (await readFile(workerPath, 'utf8')).replace(/^import .+;\r?\n/gm, '');
 let trial, postedFrames = 0, postedBytes = 0;
+const key = core._fb_key, step = core._fb_step, paint = core._fb_paint;
+core._fb_key = (id, down) => {
+  if (trial && down && id === keyIds[trial.key]) trial.pressed ??= performance.now();
+  return key(id, down);
+};
+core._fb_step = budget => {
+  const started = performance.now(), result = step(budget);
+  if (trial) trial.coreMilliseconds += performance.now() - started;
+  return result;
+};
+core._fb_paint = pointer => {
+  const started = performance.now(); paint(pointer);
+  if (trial) trial.paintMilliseconds += performance.now() - started;
+};
 const displayed = new Uint8Array(320 * 240 * 4);
 const context = { keyIds, directions, createTouchpadInput, performance, Date, Uint8Array,
   setTimeout(callback, delay) { return setTimeout(callback, Math.max(4, delay)); }, clearTimeout,
@@ -28,13 +42,17 @@ const context = { keyIds, directions, createTouchpadInput, performance, Date, Ui
     if (trial) {
       let left = 320, right = 0, count = 0;
       // Ignore the header clock and reject a purely vertical blinking caret.
-      for (let y = 105; y < 180; y++) for (let x = 8; x < 300; x++) {
+      for (let y = 45; y < 220; y++) for (let x = 8; x < 300; x++) {
         const offset = (y * 320 + x) * 4;
         if (displayed[offset] !== trial.before[offset] || displayed[offset + 1] !== trial.before[offset + 1]) {
           left = Math.min(left, x); right = Math.max(right, x); count++;
         }
       }
-      if (count >= 12 && right - left > 2) { trial.resolve(performance.now() - trial.started); trial = null; }
+      if (count >= 12 && right - left > 2) {
+        trial.resolve({ milliseconds: performance.now() - trial.started,
+          queueMilliseconds: trial.pressed - trial.started, coreMilliseconds: trial.coreMilliseconds, paintMilliseconds: trial.paintMilliseconds });
+        trial = null;
+      }
     }
     queueMicrotask(() => context.onmessage({ data: { type: 'frame-drawn' } }));
   },
@@ -42,26 +60,48 @@ const context = { keyIds, directions, createTouchpadInput, performance, Date, Ui
 runInNewContext(source + '\nglobalThis.configure = (value, pointer) => { core=value; pixels=pointer; touchpad=createTouchpadInput(core); resetClock(); }; globalThis.tick=step;', context);
 context.configure(core, pixels); context.tick();
 const samples = [];
+const scenarios = [
+  ...['n1', 'n2', 'n3', 'n4', 'n5', 'n6'].map(name => ({ name })),
+  { name: 'plus', shift: true }, { name: 'minus', shift: true },
+  ...['squ', 'pow', 'exp', 'pow10', 'trig', 'cat'].map(name => ({ name, seeded: true })),
+];
+const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
+const input = data => context.onmessage({ data: { type: 'tap', ...data } });
 try {
-  for (const [index, key] of ['n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'plus', 'minus'].entries()) {
-    await new Promise(resolve => setTimeout(resolve, 180 + index % 4 * 3));
+  for (const [index, scenario] of scenarios.entries()) {
+    if (scenario.seeded) {
+      if (['trig', 'cat'].includes(scenarios[index - 1]?.name)) { await input({ name: 'esc' }); await wait(160); }
+      await input({ name: 'del', ctrl: true }); await wait(180);
+      await input({ name: 'n2' }); await wait(180);
+    } else await wait(180 + index % 4 * 3);
     core._fb_paint(pixels);
     const before = core.HEAPU8.slice(pixels, pixels + 320 * 240 * 4);
     let timeout;
     const changed = new Promise((resolve, reject) => {
-      trial = { before, started: performance.now(), resolve };
-      timeout = setTimeout(() => reject(new Error(`${key}: no rendered glyph/template change within one second`)), 1000);
+      trial = { key: scenario.name, before, started: performance.now(), coreMilliseconds: 0, paintMilliseconds: 0, resolve };
+      timeout = setTimeout(() => reject(new Error(`${scenario.name}: no rendered glyph/template change within one second`)), 1000);
     });
-    await context.onmessage({ data: { type: 'tap', name: key, shift: index >= 6 } });
-    try { samples.push({ key, shift: index >= 6, milliseconds: Number((await changed).toFixed(2)) }); }
+    await input({ name: scenario.name, shift: !!scenario.shift });
+    try {
+      const measured = await changed;
+      samples.push({ key: scenario.name, shift: !!scenario.shift, seededExpression: scenario.seeded ? '2' : undefined,
+        ...Object.fromEntries(Object.entries(measured).map(([name, value]) => [name, Number(value.toFixed(2))])) });
+    }
     finally { clearTimeout(timeout); }
   }
 } finally { await context.onmessage({ data: { type: 'pause', value: true } }); }
-assert.equal(samples.length, 8);
+assert.equal(samples.length, scenarios.length);
+const snapshotStarted = performance.now();
+assert.equal(core._fb_save(), 1);
+const snapshotSaved = performance.now(), snapshot = core.FS.readFile('state.snap');
+const snapshotRead = performance.now(); core.FS.unlink('state.snap');
 const sorted = samples.map(sample => sample.milliseconds).sort((a, b) => a - b);
+const middle = Math.floor(sorted.length / 2);
 const report = { environment: `Node ${process.version} ${process.platform}/${process.arch}; nested timers clamped to 4 ms; immediate main-thread acknowledgement`,
   workerPath, metric: 'Worker input-message arrival to first frame with changed math glyphs/template',
-  medianMilliseconds: Number(((sorted[3] + sorted[4]) / 2).toFixed(2)), worstMilliseconds: sorted.at(-1), postedFrames, postedBytes, samples,
+  medianMilliseconds: Number(((sorted[middle - 1] + sorted[middle]) / 2).toFixed(2)), worstMilliseconds: sorted.at(-1), postedFrames, postedBytes, samples,
+  synchronousSnapshotMilliseconds: Number((snapshotSaved - snapshotStarted).toFixed(2)),
+  snapshotReadMilliseconds: Number((snapshotRead - snapshotSaved).toFixed(2)), snapshotBytes: snapshot.byteLength,
   realIPhone: false, browserCanvasAndCompositorIncluded: false };
 await mkdir('temp/qa/performance', { recursive: true });
 const name = workerPath.includes('before') ? 'input-latency-before' : 'input-latency-after';

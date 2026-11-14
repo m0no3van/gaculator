@@ -18,8 +18,8 @@ test('calculus chords retain Shift on subtraction/numpad addition without changi
   assert.deepEqual(browserKey({ key: '-', shiftKey: true, code: 'NumpadSubtract' }), { name: 'minus', ctrl: false, shift: true });
   assert.deepEqual(browserKey({ key: '+', shiftKey: true, code: 'NumpadAdd' }), { name: 'plus', ctrl: false, shift: true });
   assert.deepEqual(browserKey({ key: '+', shiftKey: true, code: 'Equal' }), { name: 'plus', ctrl: false, shift: false });
-  assert.match(layout.rows.flat().find(key => key.name === 'plus').legend, /∫/);
-  assert.match(layout.rows.flat().find(key => key.name === 'minus').legend, /d\/dx/);
+  assert.equal(layout.rows.flat().find(key => key.name === 'plus').legend, '∫');
+  assert.equal(layout.rows.flat().find(key => key.name === 'minus').legend, 'd/dx');
 });
 
 test('browser punctuation uses calculator keys without leaking host Shift; Ctrl+/ stays a fraction chord', () => {

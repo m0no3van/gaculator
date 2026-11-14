@@ -14,14 +14,26 @@ test('sliding with touch buttons=0 moves contact without holding click; release 
   assert.deepEqual(sent.at(-1), { x: 1, y: 0, contact: false, down: false });
 });
 
-test('tap clicks once; secondary fingers and cancel never turn a drag into a click', () => {
+test('a semantic tap releases tracking before its callback and never also clicks; secondary fingers and cancel never tap', () => {
   const sent = []; let clicks = 0;
-  const gesture = createTouchpadGesture(value => sent.push(value), () => clicks++);
+  const gesture = createTouchpadGesture(value => sent.push(value), () => {
+    assert.equal(sent.at(-1).cancel, true); clicks++;
+  });
   gesture.start(pointer(100, 80), rect); gesture.end(pointer(101, 81));
-  assert.equal(clicks, 1); assert.equal(sent.filter(value => value.down).length, 1);
+  assert.equal(clicks, 1); assert.equal(sent.filter(value => value.down).length, 0);
   gesture.start(pointer(60, 80), rect); assert.equal(gesture.start(pointer(60, 80, 2), rect), false);
   gesture.end(pointer(60, 80, 2)); gesture.cancel(pointer(60, 80)); gesture.end(pointer(60, 80));
   assert.equal(clicks, 1); assert.equal(sent.at(-1).cancel, true);
+});
+
+test('default raw tap still clicks once and invalid starts never send contact', () => {
+  const sent = [], gesture = createTouchpadGesture(value => sent.push(value));
+  for (const value of [pointer(19, 80), pointer(221, 80), pointer(100, 29), pointer(100, 131), { ...pointer(100, 80), isPrimary: false }])
+    assert.equal(gesture.start(value, rect), false);
+  assert.deepEqual(sent, []);
+  gesture.start(pointer(100, 80), rect); gesture.end(pointer(101, 81));
+  assert.equal(sent.filter(value => value.down).length, 1);
+  assert.equal(sent.at(-1).contact, false);
 });
 
 test('fast full-pad swipes drain bounded guest-clock deltas before release; taps survive a slow guest', () => {

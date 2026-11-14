@@ -7,6 +7,7 @@ import { prepareOffline } from './offline.js';
 import { clearProjectData } from './cleanup.js';
 import { checkReloadAvailable } from './reload.js';
 import { reloadMessages } from './dialogs.js';
+import { createAutosave } from './autosave.js';
 
 const canvas = ref(), ready = ref(false), error = ref(''), status = ref('正在准备… / Preparing…');
 const offline = ref('');
@@ -15,7 +16,8 @@ const namespace = saveNamespace(location.href);
 let worker, db, device, latestSave, autosave, nextId = 0, saveWork, releaseLock, ownsLock = false;
 const pending = new Map();
 const post = (type, fields = {}) => worker?.postMessage({ type, ...fields });
-const tap = value => { if (ready.value) post('tap', value); };
+const tap = value => { if (ready.value) { autosave?.changed(); post('tap', value); } };
+const touch = value => { if (ready.value) { autosave?.changed(value.contact); post('touch', value); } };
 function save() {
   if (!ready.value || !db) return Promise.resolve();
   if (saveWork) return saveWork;
@@ -27,7 +29,6 @@ function save() {
   return saveWork;
 }
 function showError(problem) { error.value = problem.message || String(problem); }
-async function saveNow() { try { await save(); } catch (problem) { showError(problem); } }
 async function reloadPwa() {
   if (preparing.value || starting.value || cleaning.value || cleared.value) return;
   const messages = reloadMessages();
@@ -38,7 +39,7 @@ async function reloadPwa() {
     await checkReloadAvailable(location.href);
     const remove = async () => {
       stopped = true;
-      clearInterval(autosave); ready.value = false;
+      autosave?.stop(); ready.value = false;
       worker?.terminate(); worker = null;
       for (const entry of pending.values()) { clearTimeout(entry.timeout); entry.reject(new Error('清理已停止保存 / Cleanup stopped saving')); }
       pending.clear();
@@ -67,7 +68,7 @@ async function reloadPwa() {
 async function visibility() {
   if (!ready.value) return;
   if (document.hidden) {
-    try { await save(); post('pause', { value: document.hidden }); } catch (problem) { showError(problem); }
+    try { await autosave.flush(() => document.hidden); post('pause', { value: document.hidden }); } catch (problem) { showError(problem); }
   } else post('pause', { value: false });
 }
 function keyboard(event) {
@@ -83,7 +84,7 @@ async function start() {
   if (latestSave) validateSave(latestSave, device.identity);
   worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
   const crashed = message => {
-    ready.value = false; error.value = message;
+    autosave?.stop(); ready.value = false; error.value = message;
     for (const entry of pending.values()) { clearTimeout(entry.timeout); entry.reject(new Error(message)); }
     pending.clear();
   };
@@ -94,7 +95,10 @@ async function start() {
       post('frame-drawn');
     }
     else if (data.type === 'status') status.value = data.message;
-    else if (data.type === 'ready') { ready.value = true; status.value = `${device.model} · OS ${device.os} · 本机运行 / Local emulation`; if (document.hidden) visibility(); }
+    else if (data.type === 'ready') {
+      ready.value = true; autosave = createAutosave(save, showError);
+      status.value = `${device.model} · OS ${device.os} · 本机运行 / Local emulation`; if (document.hidden) visibility();
+    }
     else if (data.type === 'error') crashed(data.message);
     else if (data.type === 'saved' || data.type === 'save-error') {
       const request = pending.get(data.id); if (!request) return;
@@ -107,7 +111,6 @@ async function start() {
     }
   };
   post('boot', { base: new URL('.', location.href).href, device, save: latestSave });
-  autosave = setInterval(saveNow, 30000);
   navigator.storage?.persist?.().catch(() => {});
 }
 onMounted(async () => {
@@ -129,7 +132,7 @@ onMounted(async () => {
   } catch (problem) { starting.value = false; showError(problem); }
 });
 onBeforeUnmount(() => {
-  clearInterval(autosave); worker?.terminate(); db?.close(); releaseLock?.();
+  autosave?.stop(); worker?.terminate(); db?.close(); releaseLock?.();
   window.removeEventListener('keydown', keyboard);
   document.removeEventListener('visibilitychange', visibility);
 });
@@ -147,6 +150,6 @@ onBeforeUnmount(() => {
       </div>
       <p class="sr-only" role="status">{{ status }} {{ offline }}</p>
     </section>
-    <Keypad :inert="!ready" @tap="tap" @touch="value => post('touch', value)" @reload-request="reloadPwa"/>
+    <Keypad :inert="!ready" @tap="tap" @touch="touch" @reload-request="reloadPwa"/>
   </main>
 </template>

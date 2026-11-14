@@ -35,11 +35,12 @@ function environment({ accept = true, online = true, cleanupFails = false, langu
   const context = { saveNamespace, reloadMessages: () => reloadMessages({ languages: [language] }), ref: value => ({ value }), onMounted() {}, onBeforeUnmount() {}, URL, Date,
     location: { href: 'https://calculator.test/app/', replace(url) { events.push(['navigate', url]); } },
     confirm(message) { events.push(['confirm', message]); return accept; }, alert(message) { events.push(['alert', message]); },
-    clearInterval() { events.push(['stop-autosave']); }, clearTimeout() {},
+    clearTimeout() {},
     async checkReloadAvailable() { events.push(['network']); if (!online) throw new Error('Offline'); },
     async clearProjectData() { events.push(['delete']); if (cleanupFails) throw new Error('Storage blocked'); },
   };
   runInNewContext(app + `\npreparing.value = starting.value = false; ready.value = ownsLock = true;
+    autosave = { stop() { globalThis.events.push(['stop-autosave']); } };
     worker = { terminate() { globalThis.events.push(['stop-worker']); } };
     db = { close() { globalThis.events.push(['close-db']); } };
     canvas.value = { getContext() { return { clearRect() {} }; } };

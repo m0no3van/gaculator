@@ -16,7 +16,7 @@ export const layout = {
   rows: [
     [key('equ', '=', '≠ ≥'), key('trig', 'trig', '?'), key('n7', '7'), key('n8', '8'), key('n9', '9'), key('metrix', '▥', ':='), key('cat', 'book', '∞ β °')],
     [key('pow', '^', 'ⁿ√'), key('squ', 'x²', '√'), key('n4', '4'), key('n5', '5'), key('n6', '6'), key('mult', '×', '"□"'), key('div', '÷')],
-    [key('exp', 'eˣ', 'ln'), key('pow10', '10ˣ', 'log'), key('n1', '1'), key('n2', '2'), key('n3', '3'), key('plus', '+', '⇧ ∫'), key('minus', '−', '⇧ d/dx')],
+    [key('exp', 'eˣ', 'ln'), key('pow10', '10ˣ', 'log'), key('n1', '1'), key('n2', '2'), key('n3', '3'), key('plus', '+', '∫'), key('minus', '−', 'd/dx')],
     [key('pleft', '(', '['), key('pright', ')', '{'), key('n0', '0'), key('dot', '.', 'capture'), key('neg', '(−)', 'ans'), key('enter', 'enter', '≈')],
   ],
   alphabet: [

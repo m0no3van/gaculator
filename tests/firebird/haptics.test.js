@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { keyFeedback, vibrateFeedback } from '../../src/firebird/haptics.js';
+import { keyFeedback, supportsSwitchHaptics, vibrateFeedback } from '../../src/firebird/haptics.js';
 
 test('entry/operator/control/confirm keys have distinct vibration timing with safe unsupported fallback', () => {
   const sent = [], nav = { vibrate(value) { sent.push(value); return true; } };
@@ -15,4 +15,13 @@ test('reload threshold uses a distinct supported vibration pattern and safely de
   assert.equal(vibrateFeedback('reload', { vibrate(value) { pattern = value; return true; } }), true);
   assert.deepEqual(pattern, [30, 40, 30]);
   assert.equal(vibrateFeedback('reload', {}), false);
+});
+
+test('native switch feedback requires a touch device with switch support and no vibration API', () => {
+  const doc = { createElement() { return { switch: false }; } };
+  assert.equal(supportsSwitchHaptics({ maxTouchPoints: 5 }, doc), true);
+  assert.equal(supportsSwitchHaptics({ maxTouchPoints: 0 }, doc), false);
+  assert.equal(supportsSwitchHaptics({ maxTouchPoints: 5, vibrate() {} }, doc), false);
+  assert.equal(supportsSwitchHaptics({ maxTouchPoints: 5 }, { createElement() { return {}; } }), false);
+  assert.equal(supportsSwitchHaptics({}, undefined), false);
 });

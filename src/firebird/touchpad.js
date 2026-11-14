@@ -1,6 +1,6 @@
 const clamp = value => Math.max(0, Math.min(1, value));
 
-export function createTouchpadGesture(send, click = () => {}) {
+export function createTouchpadGesture(send, tap) {
   let gesture;
   function position(event) {
     const { rect } = gesture;
@@ -13,8 +13,11 @@ export function createTouchpadGesture(send, click = () => {}) {
     send({ ...gesture.point, contact: true, down: false });
   }
   return {
+    get pointerId() { return gesture?.id; },
     start(event, rect) {
-      if (gesture || event.button !== 0 || rect.width <= 0 || rect.height <= 0) return false;
+      if (gesture || event.button !== 0 || event.isPrimary === false || rect.width <= 0 || rect.height <= 0
+        || event.clientX < rect.left || event.clientX > rect.left + rect.width
+        || event.clientY < rect.top || event.clientY > rect.top + rect.height) return false;
       gesture = { id: event.pointerId, rect, startX: event.clientX, startY: event.clientY, moved: false };
       gesture.point = position(event);
       send({ ...gesture.point, contact: true, down: false });
@@ -24,7 +27,12 @@ export function createTouchpadGesture(send, click = () => {}) {
     end(event) {
       if (!gesture || event.pointerId !== gesture.id) return;
       move(event);
-      if (!gesture.moved) { send({ ...gesture.point, contact: true, down: true }); click(); }
+      if (!gesture.moved) {
+        if (tap) {
+          // Release tracking contact before a queued hardware direction/modifier chord.
+          send({ ...gesture.point, contact: false, down: false, cancel: true }); tap(gesture.point);
+        } else send({ ...gesture.point, contact: true, down: true });
+      }
       send({ ...gesture.point, contact: false, down: false });
       gesture = null;
     },

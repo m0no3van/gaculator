@@ -3,24 +3,55 @@ import { onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import { layout, directions } from './keys.js';
 import Key from './Key.vue';
 import { createTouchpadGesture } from './touchpad.js';
-import { vibrateFeedback } from './haptics.js';
+import { createKeyActivation } from './key-activation.js';
+import { supportsSwitchHaptics, vibrateFeedback } from './haptics.js';
 const emit = defineEmits(['tap', 'touch', 'reload-request']);
 const modifiers = reactive({ ctrl: false, shift: false });
 const pad = ref();
+const nativeSwitch = supportsSwitchHaptics();
+let direction = 'select', nativeTapReady;
 const touching = ref(false), point = reactive({ x: 0.5, y: 0.5 });
 const gesture = createTouchpadGesture(value => {
   touching.value = value.contact; Object.assign(point, { x: value.x, y: value.y }); emit('touch', value);
-}, () => vibrateFeedback('control'));
+}, () => { nativeTapReady = direction; activateDirection(direction); });
+const activations = Object.fromEntries(Object.keys(directions).map(name => [name, createKeyActivation(() => activateDirection(name))]));
+function activateDirection(name) { vibrateFeedback('control'); press(name); }
 function press(name) {
   if (name === 'ctrl' || name === 'shift') { modifiers[name] = !modifiers[name]; return; }
   emit('tap', { name, ...modifiers }); modifiers.ctrl = modifiers.shift = false;
 }
 function down(event) {
+  const target = event.target.closest('.hh-pad-key');
+  const rect = target?.getBoundingClientRect();
+  if (rect && (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom)) {
+    event.preventDefault(); return;
+  }
   if (gesture.start(event, pad.value.getBoundingClientRect())) {
-    event.preventDefault(); pad.value.setPointerCapture(event.pointerId); vibrateFeedback('touchpad');
+    direction = target?.dataset.direction || 'select'; nativeTapReady = undefined;
+    activations[direction].markPointer();
+    if (!nativeSwitch) event.preventDefault();
+    (target || pad.value).setPointerCapture(event.pointerId); vibrateFeedback('touchpad');
+  } else event.preventDefault();
+}
+function click(event, name) {
+  if (!nativeSwitch) { activations[name].fallback(event); return; }
+  if (nativeTapReady !== name) { event.preventDefault(); activations[name].cancel(); }
+  nativeTapReady = undefined;
+}
+function keyboard(event, name) {
+  if (!['Enter', ' '].includes(event.key)) return;
+  activations[name].keyboard();
+  if (nativeSwitch && event.key === 'Enter') {
+    event.preventDefault(); if (!event.repeat) activateDirection(name);
   }
 }
-const cancel = () => gesture.cancel();
+const cancel = event => {
+  const pointer = event?.pointerId !== undefined ? event : undefined;
+  if (pointer && gesture.pointerId !== pointer.pointerId) return;
+  gesture.cancel(pointer); nativeTapReady = undefined;
+  Object.values(activations).forEach(activation => activation.cancel());
+};
+const lostCapture = event => { if (gesture.pointerId === event.pointerId) cancel(event); };
 const visibility = () => { if (document.hidden) cancel(); };
 onMounted(() => { window.addEventListener('blur', cancel); document.addEventListener('visibilitychange', visibility); });
 onBeforeUnmount(() => {
@@ -35,13 +66,16 @@ onBeforeUnmount(() => {
           <Key v-for="item in layout[side]" :key="item.name" :item="item" @press="press" @reload-request="emit('reload-request')"/>
         </div>
         <div ref="pad" class="hh-touchpad"
-          @pointerdown="down" @pointermove="gesture.move" @pointerup="gesture.end" @pointercancel="gesture.cancel"
-          @lostpointercapture="gesture.cancel" @contextmenu.prevent>
+          @pointerdown="down" @pointermove="gesture.move" @pointerup="gesture.end" @pointercancel="cancel"
+          @lostpointercapture="lostCapture" @contextmenu.prevent>
           <span v-if="touching" class="hh-pad-contact" :style="{ left: `${point.x * 100}%`, top: `${point.y * 100}%` }" aria-hidden="true"></span>
-          <button v-for="(point, direction) in directions" :key="direction" type="button" :class="`hh-pad-${direction}`"
-            :aria-label="direction" @click="event => { if (event.detail === 0) press(direction); }">
-            {{ { up: '▴', right: '▸', down: '▾', left: '◂', select: '' }[direction] }}
-          </button>
+          <component :is="nativeSwitch ? 'label' : 'button'" v-for="(point, name) in directions" :key="name"
+            :type="nativeSwitch ? undefined : 'button'" class="hh-pad-key" :class="[`hh-pad-${name}`, { 'hh-active': touching && direction === name }]" :data-direction="name"
+            :aria-label="nativeSwitch ? undefined : name" @keydown="keyboard($event, name)" @click="click($event, name)">
+            <input v-if="nativeSwitch" class="native-haptic" type="checkbox" switch role="button" :aria-label="name"
+              @click.stop @change="activations[name].fallback">
+            {{ { up: '▴', right: '▸', down: '▾', left: '◂', select: '' }[name] }}
+          </component>
         </div>
       </div>
       <div class="hh-modifiers"><Key v-for="item in layout.modifiers" :key="item.name" :item="item" :pressed="!!modifiers[item.name]" @press="press"/></div>

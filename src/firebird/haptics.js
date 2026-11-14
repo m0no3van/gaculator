@@ -10,3 +10,7 @@ export function vibrateFeedback(kind, nav = globalThis.navigator) {
   try { return typeof nav?.vibrate === 'function' && nav.vibrate(patterns[kind] ?? patterns.control); }
   catch { return false; }
 }
+
+export function supportsSwitchHaptics(nav = globalThis.navigator, doc = globalThis.document) {
+  return !!(nav?.maxTouchPoints > 0 && typeof nav.vibrate !== 'function' && doc && 'switch' in doc.createElement('input'));
+}

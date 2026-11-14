@@ -70,23 +70,24 @@ test('cancellation cleanup cannot clear the guard for a new rapid physical tap',
 
 const keySource = await readFile(new URL('../../src/firebird/Key.vue', import.meta.url), 'utf8');
 const keyScript = keySource.match(/<script setup>([\s\S]*?)<\/script>/)[1].replace(/^import .+;\r?\n/gm, '');
-function component(name, rect = { left: 0, top: 0, right: 50, bottom: 30 }) {
+function component(name, rect = { left: 0, top: 0, right: 50, bottom: 30 }, nativeSwitch = false) {
   let id = 0, now = 0;
-  const tasks = new Map(), events = [], captures = [];
+  const tasks = new Map(), events = [], captures = [], preventions = [];
   const timers = { performance: { now: () => now },
     setTimeout(callback, delay) { tasks.set(++id, { callback, delay, at: now + delay }); return id; }, clearTimeout(value) { tasks.delete(value); } };
   const context = { defineProps: () => ({ item: { name } }), defineEmits: () => (...args) => events.push(args),
     ref: value => ({ value }), onMounted() {}, onBeforeUnmount() {},
-    keyFeedback: () => 'control', vibrateFeedback: () => true,
+    keyFeedback: () => 'control', supportsSwitchHaptics: () => nativeSwitch, vibrateFeedback: () => true,
     createKeyActivation: fn => createKeyActivation(fn, timers), createOnHold: (tap, reload, threshold) => createOnHold(tap, reload, threshold, timers),
     setTimeout: timers.setTimeout, clearTimeout: timers.clearTimeout };
-  runInNewContext(keyScript + '\nglobalThis.handlers = { down, up, move, cancel, stopHold, otherPointer, lostCapture, keydown, keyup, click: activation.fallback };', context);
+  runInNewContext(keyScript + '\nglobalThis.handlers = { down, up, move, cancel, stopHold, otherPointer, lostCapture, keydown, keyup, clicked, active, click: activation.fallback };', context);
   const event = options => ({ ...pointer, clientX: (rect.left + rect.right) / 2, clientY: (rect.top + rect.bottom) / 2,
-    preventDefault() {}, currentTarget: { setPointerCapture(value) { captures.push(value); }, getBoundingClientRect() { return rect; } }, ...options });
-  return { events, captures,
+    preventDefault() { preventions.push(true); }, currentTarget: { setPointerCapture(value) { captures.push(value); }, getBoundingClientRect() { return rect; } }, ...options });
+  return { events, captures, preventions, isActive: () => context.handlers.active.value,
     down: options => context.handlers.down(event(options)), up: options => context.handlers.up(event(options)),
     move: options => context.handlers.move(event(options)), lost: options => context.handlers.lostCapture(event(options)),
     cancel: context.handlers.cancel, stopHold: context.handlers.stopHold, otherPointer: context.handlers.otherPointer, click: context.handlers.click,
+    labelClick: options => context.handlers.clicked(event(options)),
     keydown: options => context.handlers.keydown(event(options)), keyup: options => context.handlers.keyup(event(options)),
     advance(duration) { now += duration; for (const [key, task] of tasks) if (task.at <= now) { tasks.delete(key); task.callback(); } },
     endTask() { for (const [key, task] of tasks) if (task.delay === 0) { tasks.delete(key); task.callback(); } } };
@@ -172,7 +173,82 @@ test('ON keyboard release requests confirmation once after release even with Ent
   assert.deepEqual(key.events, []); key.endTask(); assert.deepEqual(key.events, [['reload-request']]);
 });
 
-test('each visible key is one semantic button without a native switch overlay', () => {
-  assert.match(keySource, /<button type="button" class="hh-key"/);
-  assert.doesNotMatch(keySource, /<input|nativeSwitch|native-haptic/);
+test('native label taps preserve browser default feedback and consume one delayed switch change', () => {
+  const key = component('del', undefined, true);
+  for (let i = 0; i < 12; i++) {
+    key.down(); key.up(); key.lost(); key.endTask(); key.advance(1000);
+    key.labelClick(); key.click({ detail: 0 });
+  }
+  assert.equal(key.events.length, 12); assert.equal(key.preventions.length, 0);
+  key.labelClick(); assert.equal(key.preventions.length, 1, 'unowned label activation is blocked');
+});
+
+test('native switch labels reject fuzzy hits outside the visible key and canceled releases', () => {
+  const key = component('cat', { left: 40, top: 40, right: 80, bottom: 70 }, true);
+  key.down({ clientY: 20 }); key.labelClick();
+  assert.deepEqual(key.events, []); assert.equal(key.preventions.length, 2);
+  key.down(); key.cancel(); key.endTask(); key.labelClick();
+  assert.deepEqual(key.events, [['press', 'cat']]); assert.equal(key.preventions.length, 3);
+});
+
+test('native switch keyboard and assistive paths activate once without synthetic clicks', () => {
+  const key = component('aa', undefined, true);
+  key.keydown({ key: 'Enter', repeat: false }); key.keydown({ key: 'Enter', repeat: true });
+  assert.equal(key.events.length, 1);
+  key.keydown({ key: ' ', repeat: false }); key.click({ type: 'change' });
+  key.click({ type: 'change' }); assert.equal(key.events.length, 3);
+  assert.doesNotMatch(keySource, /\.click\(/, 'only browser label activation forwards the trusted click');
+});
+
+test('ON keeps its ordinary button hold behavior even on native switch devices', () => {
+  const key = component('on', undefined, true); key.down(); key.advance(5000); key.up(); key.lost(); key.labelClick();
+  assert.deepEqual(key.events, []); key.endTask(); assert.deepEqual(key.events, [['reload-request']]);
+});
+
+test('physical function-key feedback lasts only until its own release, without a timer tail', () => {
+  for (const native of [false, true]) for (const name of ['squ', 'trig', 'exp', 'templates']) for (const duration of [20, 500]) {
+    const key = component(name, undefined, native);
+    key.down(); assert.equal(key.isActive(), true);
+    key.advance(duration); assert.equal(key.isActive(), true, 'holding cannot expire the physical pressed state');
+    key.up(); assert.equal(key.isActive(), false, 'release clears feedback synchronously');
+    if (native) key.labelClick();
+    key.endTask(); key.advance(1000); key.click({ detail: 0 });
+    assert.equal(key.isActive(), false, 'delayed native change/click cannot relight the key');
+    assert.equal(key.events.length, 1);
+  }
+});
+
+test('moving out, cancellation and lost capture immediately clear the owned visual press', () => {
+  for (const native of [false, true]) for (const release of [key => key.move({ clientY: 40 }), key => key.cancel(), key => key.lost()]) {
+    const key = component('squ', undefined, native); key.down(); assert.equal(key.isActive(), true);
+    release(key); assert.equal(key.isActive(), false);
+    key.advance(1000); key.up(); assert.equal(key.isActive(), false); assert.equal(key.events.length, 1);
+  }
+});
+
+test('another pointer release cannot clear a held key, and semantic activation still pulses', () => {
+  const key = component('squ'); key.click({ detail: 0 }); assert.equal(key.isActive(), true);
+  key.advance(89); assert.equal(key.isActive(), true); key.advance(1); assert.equal(key.isActive(), false);
+  key.click({ detail: 0 }); key.advance(20); key.down(); key.advance(100);
+  assert.equal(key.isActive(), true, 'an earlier assistive pulse timer cannot end a physical hold');
+  key.up({ pointerId: 2 }); assert.equal(key.isActive(), true);
+  key.up(); assert.equal(key.isActive(), false);
+});
+
+test('ON releases its visual feedback immediately without relighting on its short tap', () => {
+  for (const duration of [20, 5000]) {
+    const key = component('on'); key.down(); key.advance(duration); assert.equal(key.isActive(), true);
+    key.up(); assert.equal(key.isActive(), false); key.endTask(); assert.equal(key.isActive(), false);
+  }
+  const key = component('on'); key.keydown({ key: 'Enter', repeat: false }); assert.equal(key.isActive(), true);
+  key.keyup({ key: 'Enter' }); assert.equal(key.isActive(), false);
+});
+
+test('a stale captured owner after blur cannot turn a later assistive pulse into a stuck press', () => {
+  for (const native of [false, true]) {
+    const key = component('squ', undefined, native); key.down(); key.stopHold();
+    key.click({ detail: 0 }); // Consume the retained physical gesture guard.
+    key.click({ detail: 0 }); assert.equal(key.isActive(), true);
+    key.advance(90); assert.equal(key.isActive(), false);
+  }
 });
