@@ -1,0 +1,34 @@
+{
+  "name": "gaculator",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "npm run build && npm run serve",
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "build:firebird": "python -B -X utf8 tools/build-firebird.py",
+    "serve": "node tools/serve.mjs",
+    "lan": "node tools/lan-firebird.mjs",
+    "test": "node --test tests/firebird && python -B -X utf8 -m unittest discover -s tests/firebird -p *_test.py",
+    "pages:package": "npm run build && python -B -X utf8 tools/package-pages.py",
+    "test:wasm": "node tools/test-firebird.mjs",
+    "test:touchpad": "node tools/test-touchpad.mjs",
+    "check:docs": "python -B -X utf8 tools/check_docs.py",
+    "check:delivery": "node tools/check-delivery.mjs",
+    "prepare:assets": "python -B -X utf8 tools/build-firebird.py --source-only && node tools/package-firebird.mjs",
+    "predev": "npm run prepare:assets",
+    "prebuild": "npm run prepare:assets"
+  },
+  "dependencies": {
+    "qrcode": "1.5.4",
+    "vue": "3.5.44"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "5.2.4",
+    "vite": "6.4.5"
+  }
+}

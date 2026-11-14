@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.certs/
+.sites-runtime/
+*.log
+.reference/
+temp/
+__pycache__/
+public/vendor/firebird/
+public/vendor/firebird-device/

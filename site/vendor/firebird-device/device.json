@@ -1,0 +1,25 @@
+{
+  "format": 1,
+  "model": "TI-Nspire CX CAS",
+  "os": "4.5.2.8",
+  "identity": "95d603da91bc1c296e2cbf886cfbb299936260320b55d87a81d083dd98fb1d23",
+  "wasmSha256": "a82e4f828435e36c0869b017446cd1373bcb17cd3a649b931495323198632b93",
+  "files": [
+    {
+      "name": "boot1.img",
+      "url": "boot1.img.gz",
+      "bytes": 524288,
+      "compressedBytes": 152104,
+      "sha256": "0a911a688af9522b6987aa62cf455f592dc37613c44e98de1507bb80d8b94f80",
+      "compressedSha256": "c05d29e284adfbac87b106e56425772f150e0f5ce5d4d6f7e07009b6d93ae29f"
+    },
+    {
+      "name": "flash.img",
+      "url": "flash.img.gz",
+      "bytes": 138412032,
+      "compressedBytes": 19574834,
+      "sha256": "43a00d93c97a06969bfcdefca1d7a0356256286c1cbc5e7109a9b0d7a126dc1e",
+      "compressedSha256": "05ac362fc5cbfc2bd10d35a496c3e6babb1b3c03b40c7818794c3410256727ea"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "id": "./",
+  "name": "Gaculator Firebird",
+  "short_name": "Gaculator",
+  "description": "Local Firebird emulator · 本地离线模拟器",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#e9ecef",
+  "theme_color": "#30343b",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}
