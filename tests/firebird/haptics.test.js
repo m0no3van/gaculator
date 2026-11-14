@@ -17,3 +17,10 @@ test('Safari native-switch path requires a touch device and actual switch suppor
   assert.equal(supportsSwitchHaptics({ maxTouchPoints: 5, vibrate() {} }, supported), false);
   assert.equal(supportsSwitchHaptics({ maxTouchPoints: 5 }, { createElement() { return {}; } }), false);
 });
+
+test('reload threshold uses a distinct supported vibration pattern and safely declines without an API', () => {
+  let pattern;
+  assert.equal(vibrateFeedback('reload', { vibrate(value) { pattern = value; return true; } }), true);
+  assert.deepEqual(pattern, [30, 40, 30]);
+  assert.equal(vibrateFeedback('reload', {}), false);
+});

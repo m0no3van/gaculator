@@ -6,10 +6,11 @@ import { openSaves, storedState, validateSave, saveNamespace } from './saves.js'
 import { prepareOffline } from './offline.js';
 import { clearProjectData } from './cleanup.js';
 import { checkReloadAvailable } from './reload.js';
+import { reloadMessages } from './dialogs.js';
 
 const canvas = ref(), ready = ref(false), error = ref(''), status = ref('正在准备… / Preparing…');
 const offline = ref('');
-const settings = ref(), preparing = ref(true), starting = ref(true), cleaning = ref(false), cleared = ref(false);
+const preparing = ref(true), starting = ref(true), cleaning = ref(false), cleared = ref(false);
 const namespace = saveNamespace(location.href);
 let worker, db, device, latestSave, autosave, nextId = 0, saveWork, releaseLock, ownsLock = false;
 const pending = new Map();
@@ -27,16 +28,14 @@ function save() {
 }
 function showError(problem) { error.value = problem.message || String(problem); }
 async function saveNow() { try { await save(); } catch (problem) { showError(problem); } }
-async function clearData(reload = false) {
+async function reloadPwa() {
   if (preparing.value || starting.value || cleaning.value || cleared.value) return;
-  const question = reload
-    ? '是否重载此 PWA？\n这会永久清空本机存档和缓存，并重新下载应用及约 20 MB 镜像。云端没有你的个人存档备份；此操作无法撤销。\nReload this PWA? Permanently delete local saves/cache and download the app/device again. There is no cloud backup of your saves.'
-    : '永久删除此计算器的本机存档和离线缓存？无法撤销。\nPermanently delete this calculator’s local save and offline cache? This cannot be undone.';
-  if (!confirm(question)) return;
+  const messages = reloadMessages();
+  if (!window.confirm(messages.confirm)) return;
   cleaning.value = true;
   let stopped = false;
   try {
-    if (reload) await checkReloadAvailable(location.href);
+    await checkReloadAvailable(location.href);
     const remove = async () => {
       stopped = true;
       clearInterval(autosave); ready.value = false;
@@ -56,14 +55,12 @@ async function clearData(reload = false) {
       await remove();
     });
     else throw new Error('需要支持 Web Locks 的安全浏览器 / Secure browser with Web Locks required');
-    if (reload) {
-      const target = new URL('index.html', location.href);
-      target.searchParams.set('pwa-reload', Date.now());
-      location.replace(target.href);
-    }
+    const target = new URL('index.html', location.href);
+    target.searchParams.set('pwa-reload', Date.now());
+    location.replace(target.href);
   } catch (problem) {
-    if (reload && !stopped) alert(`重载失败，已保留本机数据。请联网重试。\nReload failed; local data retained. Reconnect and retry.\n${problem.message}`);
-    else showError(problem);
+    if (!stopped) window.alert(messages.unavailable);
+    else showError(new Error(messages.failed));
   }
   finally { cleaning.value = false; }
 }
@@ -74,7 +71,7 @@ async function visibility() {
   } else post('pause', { value: false });
 }
 function keyboard(event) {
-  if (!ready.value || settings.value?.open || event.target.closest('input, textarea, select, button, a')) return;
+  if (!ready.value || event.target.closest('input, textarea, select, button, a')) return;
   const value = browserKey(event);
   if (value) { event.preventDefault(); if (!event.repeat) tap(value); }
 }
@@ -142,34 +139,14 @@ onBeforeUnmount(() => {
     <section class="display-dock">
       <div class="lcd-frame">
         <canvas ref="canvas" width="320" height="240" tabindex="0" aria-label="计算器屏幕 / Calculator screen" :aria-busy="!ready"></canvas>
-        <button class="settings-button" type="button" aria-label="缓存与清理 / Cache and cleanup" @click="settings.showModal()">⋯</button>
         <template v-if="!ready && !error && !cleared">
           <span class="screen-loading" aria-hidden="true"></span>
           <p class="screen-status">{{ preparing ? offline : status }}</p>
         </template>
-        <p v-if="cleared" class="screen-status">本项目数据已清除，可删除主屏幕图标。<br>Project data cleared. You can remove the Home Screen icon.</p>
         <p v-if="error" role="alert" class="screen-error">{{ error }}</p>
       </div>
       <p class="sr-only" role="status">{{ status }} {{ offline }}</p>
     </section>
-    <Keypad :inert="!ready" @tap="tap" @touch="value => post('touch', value)" @reload-request="clearData(true)"/>
-    <dialog ref="settings" class="settings-dialog" aria-labelledby="settings-title" @cancel="event => { if (cleaning) event.preventDefault(); }">
-      <h2 id="settings-title">缓存与清理 / Cache and cleanup</h2>
-      <p role="status">{{ cleared ? '本项目缓存与存档已清除 / Project cache and save removed' : offline }}</p>
-      <p>首次下载约 20 MB 镜像；缓存完成后从本机加载。每次仍需解压、初始化模拟器。</p>
-      <p>The first download includes about 20 MB of device images. Later launches use the local cache, then decompress and initialize the emulator.</p>
-      <p>卸载前可在此永久删除本项目的离线缓存、存档及离线服务。请在主屏幕应用内执行；Safari 与已安装应用可能使用不同的存储空间。仅删除图标不能保证清除 Safari 数据。</p>
-      <p>Before uninstalling, clear this project’s cache, save and offline service here inside the Home Screen app. Safari may use separate storage. Removing an icon does not guarantee removal of Safari data.</p>
-      <p>要清理 Safari 的副本：设置 → App → Safari → 高级 → 网站数据，删除对应站点。此操作可能同时删除同域名其他网页的数据。</p>
-      <p>For Safari’s copy: Settings → Apps → Safari → Advanced → Website Data; remove the site. This may also clear other pages on the same domain.</p>
-      <p>长按 ON 五秒可请求重载；确认后清空存档与缓存，再联网下载。也可使用下方按钮。</p>
-      <p>Hold ON for five seconds to request a fresh download after clearing local data. Confirmation is required; the button below does the same.</p>
-      <p v-if="error" role="alert">{{ error }}</p>
-      <div class="settings-actions">
-        <button type="button" :disabled="preparing || starting || cleaning || cleared" @click="clearData(false)">{{ cleaning ? '清理中… / Clearing…' : '清除本机数据 / Clear local data' }}</button>
-        <button type="button" :disabled="preparing || starting || cleaning || cleared" @click="clearData(true)">重载此 PWA / Reload PWA</button>
-        <button type="button" autofocus :disabled="cleaning" @click="settings.close()">关闭 / Close</button>
-      </div>
-    </dialog>
+    <Keypad :inert="!ready" @tap="tap" @touch="value => post('touch', value)" @reload-request="reloadPwa"/>
   </main>
 </template>

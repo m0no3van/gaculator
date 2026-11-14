@@ -10,7 +10,7 @@ function fixture() {
     setTimeout(callback, delay) { const id = ++next; pending.set(id, { at: now + delay, callback }); return id; },
     clearTimeout(id) { pending.delete(id); },
   };
-  const hold = createOnHold(() => events.push('tap'), () => events.push('reload'), timers);
+  const hold = createOnHold(() => events.push('tap'), () => events.push('reload'), () => events.push('feedback'), timers);
   function advance(duration, runTimers = true) {
     now += duration;
     if (runTimers) for (const [id, task] of pending) if (task.at <= now) { pending.delete(id); task.callback(); }
@@ -27,11 +27,13 @@ test('ON releases before five seconds tap once without a reload or an early firm
   advance(5001); assert.deepEqual(events, ['tap']);
 });
 
-test('ON held for five seconds requests confirmation once and never emits the short tap', () => {
+test('ON gives threshold feedback while held and requests confirmation only after release/default events finish', () => {
   const { hold, advance, events } = fixture();
   hold.start(pointer()); advance(4999); assert.deepEqual(events, []);
-  advance(1); assert.deepEqual(events, ['reload']);
-  advance(5000); hold.end(pointer()); assert.deepEqual(events, ['reload']);
+  advance(1); assert.deepEqual(events, ['feedback']);
+  advance(5000); assert.deepEqual(events, ['feedback']);
+  hold.end(pointer()); assert.deepEqual(events, ['feedback']);
+  advance(0); assert.deepEqual(events, ['feedback', 'reload']);
 });
 
 test('cancel, secondary pointers and non-primary input disarm the long hold', () => {
@@ -50,12 +52,44 @@ test('cancel, secondary pointers and non-primary input disarm the long hold', ()
 test('unrelated pointer release cannot turn an active hold into a short ON tap', () => {
   const { hold, advance, events } = fixture();
   hold.start(pointer()); hold.end(pointer(2)); advance(5000);
-  assert.deepEqual(events, ['reload']);
+  assert.deepEqual(events, ['feedback']);
+  hold.end(pointer()); advance(0); assert.deepEqual(events, ['feedback', 'reload']);
 });
 
 test('a busy event loop cannot turn a completed five-second hold into a short tap', () => {
   const { hold, advance, events } = fixture();
   hold.start(pointer()); advance(5000, false);
   hold.end(pointer()); advance(1);
-  assert.deepEqual(events, ['reload']);
+  assert.deepEqual(events, ['feedback', 'reload']);
+});
+
+test('ON Enter/Space hold uses the same five-second threshold without key-repeat or click duplicates', () => {
+  for (const key of ['Enter', ' ']) {
+    const { hold, advance, events } = fixture();
+    assert.equal(hold.startKey({ key, repeat: false }), true);
+    advance(4999); assert.deepEqual(events, []);
+    assert.equal(hold.startKey({ key, repeat: true }), false);
+    advance(1); assert.deepEqual(events, ['feedback']);
+    hold.endKey({ key }); assert.deepEqual(events, ['feedback']);
+    advance(0); assert.deepEqual(events, ['feedback', 'reload']);
+  }
+});
+
+test('cancel after threshold feedback or before the deferred confirmation prevents reload', () => {
+  for (const releaseFirst of [false, true]) {
+    const { hold, advance, events } = fixture();
+    hold.start(pointer()); advance(5000);
+    if (releaseFirst) hold.end(pointer());
+    hold.cancel(); advance(1);
+    assert.deepEqual(events, ['feedback']);
+  }
+});
+
+test('ON keyboard short release taps once; cancellation prevents a later keyup from firing', () => {
+  const { hold, advance, events } = fixture();
+  hold.startKey({ key: 'Enter' }); advance(100); hold.endKey({ key: 'Enter' });
+  assert.deepEqual(events, ['tap']);
+  hold.startKey({ key: ' ' }); advance(4999); hold.cancel(); advance(1); hold.endKey({ key: ' ' });
+  assert.deepEqual(events, ['tap']);
+  assert.equal(hold.startKey({ key: 'x' }), false);
 });

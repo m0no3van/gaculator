@@ -5,7 +5,7 @@ export function keyFeedback(name) {
   return 'control';
 }
 
-const patterns = { entry: 4, operation: 8, control: 12, confirm: [12, 20, 12], touchpad: 3 };
+const patterns = { entry: 4, operation: 8, control: 12, confirm: [12, 20, 12], touchpad: 3, reload: [30, 40, 30] };
 export function vibrateFeedback(kind, nav = globalThis.navigator) {
   try { return typeof nav?.vibrate === 'function' && nav.vibrate(patterns[kind] ?? patterns.control); }
   catch { return false; }
