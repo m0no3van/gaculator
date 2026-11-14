@@ -80,13 +80,13 @@ function component(name, rect = { left: 0, top: 0, right: 50, bottom: 30 }, nati
     keyFeedback: () => 'control', supportsSwitchHaptics: () => nativeSwitch, vibrateFeedback: () => true,
     createKeyActivation: fn => createKeyActivation(fn, timers), createOnHold: (tap, reload, threshold) => createOnHold(tap, reload, threshold, timers),
     setTimeout: timers.setTimeout, clearTimeout: timers.clearTimeout };
-  runInNewContext(keyScript + '\nglobalThis.handlers = { down, up, move, cancel, stopHold, otherPointer, lostCapture, keydown, keyup, clicked, active, click: activation.fallback };', context);
+  runInNewContext(keyScript + '\nglobalThis.handlers = { down, up, move, cancel, stopHold, otherPointer, otherKey, lostCapture, keydown, keyup, clicked, active, click: activation.fallback };', context);
   const event = options => ({ ...pointer, clientX: (rect.left + rect.right) / 2, clientY: (rect.top + rect.bottom) / 2,
     preventDefault() { preventions.push(true); }, currentTarget: { setPointerCapture(value) { captures.push(value); }, getBoundingClientRect() { return rect; } }, ...options });
   return { events, captures, preventions, isActive: () => context.handlers.active.value,
     down: options => context.handlers.down(event(options)), up: options => context.handlers.up(event(options)),
     move: options => context.handlers.move(event(options)), lost: options => context.handlers.lostCapture(event(options)),
-    cancel: context.handlers.cancel, stopHold: context.handlers.stopHold, otherPointer: context.handlers.otherPointer, click: context.handlers.click,
+    cancel: context.handlers.cancel, stopHold: context.handlers.stopHold, otherPointer: context.handlers.otherPointer, otherKey: context.handlers.otherKey, click: context.handlers.click,
     labelClick: options => context.handlers.clicked(event(options)),
     keydown: options => context.handlers.keydown(event(options)), keyup: options => context.handlers.keyup(event(options)),
     advance(duration) { now += duration; for (const [key, task] of tasks) if (task.at <= now) { tasks.delete(key); task.callback(); } },
@@ -141,7 +141,7 @@ test('ON release keeps deferred confirmation through normal lostpointercapture',
   const key = component('on'); key.down(); key.advance(5000);
   assert.deepEqual(key.events, [], 'the held pointer cannot confirm a destructive native dialog');
   key.up(); key.lost(); key.click({ detail: 0 }); assert.deepEqual(key.events, []);
-  key.endTask(); assert.deepEqual(key.events, [['reload-request']]);
+  key.advance(499); assert.deepEqual(key.events, []); key.advance(1); assert.deepEqual(key.events, [['reload-request']]);
 });
 
 test('moving ON outside its key or losing capture cancels reload', () => {
@@ -170,7 +170,7 @@ test('a fresh primary press recovers from blur with no old release delivered', (
 test('ON keyboard release requests confirmation once after release even with Enter repeats', () => {
   const key = component('on'); key.keydown({ key: 'Enter', repeat: false }); key.advance(5000);
   key.keydown({ key: 'Enter', repeat: true }); key.keyup({ key: 'Enter' }); key.click({ detail: 0 });
-  assert.deepEqual(key.events, []); key.endTask(); assert.deepEqual(key.events, [['reload-request']]);
+  assert.deepEqual(key.events, []); key.advance(500); assert.deepEqual(key.events, [['reload-request']]);
 });
 
 test('native label taps preserve browser default feedback and consume one delayed switch change', () => {
@@ -202,7 +202,7 @@ test('native switch keyboard and assistive paths activate once without synthetic
 
 test('ON keeps its ordinary button hold behavior even on native switch devices', () => {
   const key = component('on', undefined, true); key.down(); key.advance(5000); key.up(); key.lost(); key.labelClick();
-  assert.deepEqual(key.events, []); key.endTask(); assert.deepEqual(key.events, [['reload-request']]);
+  assert.deepEqual(key.events, []); key.advance(500); assert.deepEqual(key.events, [['reload-request']]);
 });
 
 test('physical function-key feedback lasts only until its own release, without a timer tail', () => {
@@ -250,5 +250,12 @@ test('a stale captured owner after blur cannot turn a later assistive pulse into
     key.click({ detail: 0 }); // Consume the retained physical gesture guard.
     key.click({ detail: 0 }); assert.equal(key.isActive(), true);
     key.advance(90); assert.equal(key.isActive(), false);
+  }
+});
+
+test('fresh input or blur during the release quiet interval cancels the native reload prompt', () => {
+  for (const interrupt of [key => key.otherPointer({ pointerId: 2 }), key => key.otherKey(), key => key.stopHold()]) {
+    const key = component('on'); key.down(); key.advance(5000); key.up(); key.labelClick(); key.advance(499);
+    assert.deepEqual(key.events, []); interrupt(key); key.advance(1000); assert.deepEqual(key.events, []);
   }
 });

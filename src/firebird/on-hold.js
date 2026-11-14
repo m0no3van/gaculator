@@ -23,12 +23,13 @@ export function createOnHold(tap, reload, threshold = () => {}, timers = globalT
     cancel();
     if (fired || elapsed >= 5000) {
       if (!fired) threshold();
-      // Finish release/default clicks before a native confirmation can receive input.
-      requestTimer = timers.setTimeout(() => { requestTimer = undefined; reload(); }, 0);
+      // Let delayed compatibility clicks finish before a destructive native prompt opens.
+      requestTimer = timers.setTimeout(() => { requestTimer = undefined; reload(); }, 500);
     } else tap();
   }
   return {
-    get pointerId() { return pointer?.id; }, start, end,
+    get pointerId() { return pointer?.id; },
+    get pending() { return requestTimer !== undefined; }, start, end,
     startKey(event) {
       if (event.repeat || !['Enter', ' '].includes(event.key)) return false;
       return start({ pointerId: `key:${event.key}`, button: 0 });

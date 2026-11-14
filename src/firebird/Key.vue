@@ -25,8 +25,9 @@ const cancel = () => { pointerId = undefined; nativePress = false; stopHold(); a
 const lostCapture = event => { if (event.pointerId === pointerId) stopHold(); };
 const visibility = () => { if (document.hidden) stopHold(); };
 const otherPointer = event => {
-  if (hold.pointerId !== undefined && event.pointerId !== hold.pointerId) stopHold();
+  if (hold.pending || (hold.pointerId !== undefined && event.pointerId !== hold.pointerId)) stopHold();
 };
+const otherKey = () => { if (hold.pending) stopHold(); };
 function down(event) {
   if (event.button !== 0 || event.isPrimary === false || !inside(event)) {
     if (nativeSwitch) { nativePress = false; event.preventDefault(); }
@@ -78,13 +79,19 @@ function move(event) {
 onMounted(() => {
   window.addEventListener('blur', stopHold);
   document.addEventListener('visibilitychange', visibility);
-  if (props.item.name === 'on') window.addEventListener('pointerdown', otherPointer, true);
+  if (props.item.name === 'on') {
+    window.addEventListener('pointerdown', otherPointer, true);
+    window.addEventListener('keydown', otherKey, true);
+  }
 });
 onBeforeUnmount(() => {
   clearTimeout(timer); cancel(); activation.reset();
   window.removeEventListener('blur', stopHold);
   document.removeEventListener('visibilitychange', visibility);
-  if (props.item.name === 'on') window.removeEventListener('pointerdown', otherPointer, true);
+  if (props.item.name === 'on') {
+    window.removeEventListener('pointerdown', otherPointer, true);
+    window.removeEventListener('keydown', otherKey, true);
+  }
 });
 </script>
 <template>

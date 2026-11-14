@@ -27,13 +27,15 @@ test('ON releases before five seconds tap once without a reload or an early firm
   advance(5001); assert.deepEqual(events, ['tap']);
 });
 
-test('ON gives threshold feedback while held and requests confirmation only after release/default events finish', () => {
+test('ON gives threshold feedback while held and waits500ms after release for compatibility clicks', () => {
   const { hold, advance, events } = fixture();
   hold.start(pointer()); advance(4999); assert.deepEqual(events, []);
   advance(1); assert.deepEqual(events, ['feedback']);
   advance(5000); assert.deepEqual(events, ['feedback']);
   hold.end(pointer()); assert.deepEqual(events, ['feedback']);
-  advance(0); assert.deepEqual(events, ['feedback', 'reload']);
+  assert.equal(hold.pending, true);
+  advance(499); assert.deepEqual(events, ['feedback']);
+  advance(1); assert.deepEqual(events, ['feedback', 'reload']); assert.equal(hold.pending, false);
 });
 
 test('cancel, secondary pointers and non-primary input disarm the long hold', () => {
@@ -53,13 +55,13 @@ test('unrelated pointer release cannot turn an active hold into a short ON tap',
   const { hold, advance, events } = fixture();
   hold.start(pointer()); hold.end(pointer(2)); advance(5000);
   assert.deepEqual(events, ['feedback']);
-  hold.end(pointer()); advance(0); assert.deepEqual(events, ['feedback', 'reload']);
+  hold.end(pointer()); advance(500); assert.deepEqual(events, ['feedback', 'reload']);
 });
 
 test('a busy event loop cannot turn a completed five-second hold into a short tap', () => {
   const { hold, advance, events } = fixture();
   hold.start(pointer()); advance(5000, false);
-  hold.end(pointer()); advance(1);
+  hold.end(pointer()); advance(499); assert.deepEqual(events, ['feedback']); advance(1);
   assert.deepEqual(events, ['feedback', 'reload']);
 });
 
@@ -71,7 +73,8 @@ test('ON Enter/Space hold uses the same five-second threshold without key-repeat
     assert.equal(hold.startKey({ key, repeat: true }), false);
     advance(1); assert.deepEqual(events, ['feedback']);
     hold.endKey({ key }); assert.deepEqual(events, ['feedback']);
-    advance(0); assert.deepEqual(events, ['feedback', 'reload']);
+    advance(499); assert.deepEqual(events, ['feedback']);
+    advance(1); assert.deepEqual(events, ['feedback', 'reload']);
   }
 });
 
@@ -80,9 +83,16 @@ test('cancel after threshold feedback or before the deferred confirmation preven
     const { hold, advance, events } = fixture();
     hold.start(pointer()); advance(5000);
     if (releaseFirst) hold.end(pointer());
-    hold.cancel(); advance(1);
+    hold.cancel(); advance(501);
     assert.deepEqual(events, ['feedback']);
   }
+});
+
+test('a fresh hold cancels a pending confirmation and starts its own threshold', () => {
+  const { hold, advance, events } = fixture(); hold.start(pointer()); advance(5000); hold.end(pointer());
+  advance(499); hold.start(pointer(2)); assert.equal(hold.pending, false); advance(1);
+  assert.deepEqual(events, ['feedback']); hold.end(pointer(2)); assert.deepEqual(events, ['feedback', 'tap']);
+  advance(500); assert.deepEqual(events, ['feedback', 'tap']);
 });
 
 test('ON keyboard short release taps once; cancellation prevents a later keyup from firing', () => {
