@@ -13,7 +13,8 @@ function inputArrived() {
   lastFrameTime = -Infinity;
   clearTimeout(timer);
   const ahead = (core._fb_ticks() - clockTicks) * 10 - (performance.now() - clockTime);
-  timer = setTimeout(step, Math.max(0, ahead - 20));
+  if (ahead <= 20) step();
+  else timer = setTimeout(step, ahead - 20);
 }
 async function checked(url, hash) {
   const response = await fetch(url);
@@ -45,6 +46,8 @@ function snapshot(id) {
     core.FS.unlink('state.snap');
     send('saved', { id, value: { format: 1, identity, savedAt: Date.now(), bytes } }, [bytes.buffer]);
   } catch (error) { send('save-error', { id, message: error.message }); }
+  // Snapshot compression pauses guest time; do not fast-forward through that wall time.
+  finally { resetClock(); }
 }
 function step() {
   if (paused || failed) return;
@@ -66,9 +69,10 @@ function step() {
         releaseAt = now + 4;
       }
     }
-    if (!core._fb_step(8)) throw new Error('The emulated system stopped. Reopen to restore the last save.');
     touchpad.flush();
+    if (!core._fb_step(8)) throw new Error('The emulated system stopped. Reopen to restore the last save.');
     const time = performance.now();
+    if (activeTap || taps.length || touchpad.active) interactiveUntil = time + 150;
     if (!framePending && (time < interactiveUntil || time - lastFrameTime >= 1000 / 30)) {
       core._fb_paint(pixels);
       const current = new Uint32Array(core.HEAPU8.buffer, pixels, 320 * 240);

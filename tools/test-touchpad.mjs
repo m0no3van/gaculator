@@ -3,6 +3,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { gunzipSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
+import { runInNewContext } from 'node:vm';
 import createFirebird from '../public/vendor/firebird/firebird.mjs';
 import { createTouchpadGesture, createTouchpadInput } from '../src/firebird/touchpad.js';
 import { keyIds, directions } from '../src/firebird/keys.js';
@@ -15,10 +16,20 @@ const core = await createFirebird({ wasmBinary, print: () => {} });
 for (const name of ['boot1.img', 'flash.img']) core.FS.writeFile(name, gunzipSync(await readFile('public/vendor/firebird-device/' + name + '.gz')), { canOwn: true });
 core.FS.writeFile('state.snap', await readFile(`${qa}/roundtrip.snap`));
 assert.equal(core._fb_start(1), 1); core.FS.unlink('flash.img'); core._fb_release();
-const pixels = core._malloc(320 * 240 * 4), input = createTouchpadInput(core);
+const pixels = core._malloc(320 * 240 * 4);
+const source = (await readFile('src/firebird/worker.js', 'utf8')).replace(/^import .+;\r?\n/gm, '');
+const context = { keyIds, directions, createTouchpadInput, Date, Uint8Array,
+  performance: { now: () => core._fb_ticks() * 10 }, setTimeout() {}, clearTimeout() {},
+  postMessage(message) {
+    if (message.type === 'error') throw new Error(message.message);
+    if (message.type === 'frame') context.onmessage({ data: { type: 'frame-drawn' } });
+  } };
+runInNewContext(source + '\nglobalThis.configure = (value, pointer) => { core=value; pixels=pointer; touchpad=createTouchpadInput(core); resetClock(); }; globalThis.tick=step; globalThis.contactActive=()=>touchpad.active;', context);
+context.configure(core, pixels);
+const input = { receive: value => context.onmessage({ data: { type: 'touch', ...value } }), get active() { return context.contactActive(); } };
 function advance(ticks) {
   const end = core._fb_ticks() + ticks;
-  for (let i = 0; i < 20000 && core._fb_ticks() < end; ++i) { assert.equal(core._fb_step(8), 1); input.flush(); }
+  for (let i = 0; i < 20000 && core._fb_ticks() < end; ++i) context.tick();
   assert.ok(core._fb_ticks() >= end);
 }
 function tap(name, ctrl = false) {
@@ -72,5 +83,5 @@ navigate('right'); const returnedGraph = await capture('touchpad-ctrl-right-grap
 assert.ok(darkCount(returnedGraph, 158, 45, 160, 220) > graphAxis / 2, 'Ctrl-right switched calculator back to graph');
 assert.equal(input.active, false, 'semantic navigation leaves no raw contact held');
 await writeFile(`${qa}/touchpad-validation.json`, JSON.stringify({ wasmSha256: prior.wasmSha256,
-  guestCursorMovedRight: true, dragHeldClick: false, released: true, ctrlLeftRightRoundtrip: true, phoneVerified: false }, null, 2));
-console.log('PASS actual WASM graph touchpad movement/release and Ctrl-left/right calculator/graph roundtrip.');
+  guestCursorMovedRight: true, dragHeldClick: false, released: true, ctrlLeftRightRoundtrip: true, workerInputPath: true, phoneVerified: false }, null, 2));
+console.log('PASS actual Worker/WASM graph touchpad movement/release and Ctrl-left/right calculator/graph roundtrip.');

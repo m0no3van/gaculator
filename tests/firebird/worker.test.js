@@ -79,9 +79,8 @@ test('new input cancels the idle wait and can draw a changed LCD before the idle
   await context.onmessage({ data: { type: 'frame-drawn' } });
   time = 5; core.HEAPU8[0] = 1;
   await context.onmessage({ data: { type: 'tap', name: 'n1' } });
-  assert.equal(cancelled, 7); assert.equal(scheduled.delay, 0);
-  scheduled.callback();
-  assert.equal(frames, 2, 'input does not wait for the normal 33 ms repaint slot');
+  assert.equal(cancelled, 7);
+  assert.equal(frames, 2, 'input steps immediately in its Worker message, without an extra timer or repaint slot');
   assert.equal(sent[1].y, 0); assert.equal(sent[1].height, 1);
   assert.equal(sent[1].bytes.length, 320 * 4, 'only a changed row crosses the Worker boundary');
   await context.onmessage({ data: { type: 'touch', x: .5, y: .5, contact: true, down: false } });
@@ -101,4 +100,59 @@ test('new input cancels the idle wait and can draw a changed LCD before the idle
   const displayed = new Uint8Array(core.HEAPU8.length);
   for (const frame of sent) displayed.set(frame.bytes, frame.y * 320 * 4);
   assert.deepEqual(displayed, core.HEAPU8, 'dirty-row reconstruction preserves the complete native framebuffer');
+});
+
+test('touch movement reaches the CPU in the due batch and long contact keeps interactive frame checks', async () => {
+  const source = (await readFile(new URL('../../src/firebird/worker.js', import.meta.url), 'utf8')).replace(/^import .+;\r?\n/gm, '');
+  let ticks = 0, time = 0, x = .5, frames = 0;
+  const seen = [];
+  const core = { HEAPU8: new Uint8Array(320 * 240 * 4), _fb_ticks: () => ticks,
+    _fb_touch(value) { x = value; }, _fb_key() {}, _fb_release() {}, _fb_paint() {},
+    _fb_step() { seen.push(x); ticks += 2; return 1; } };
+  const context = { keyIds, directions, createTouchpadInput, performance: { now: () => time }, Date, Uint8Array,
+    postMessage(value) { if (value.type === 'frame') frames++; }, setTimeout() {}, clearTimeout() {} };
+  runInNewContext(source + '\nglobalThis.configure = value => { core=value; pixels=0; touchpad=createTouchpadInput(core); resetClock(); }; globalThis.tick=step;', context);
+  context.configure(core);
+  await context.onmessage({ data: { type: 'touch', x: .5, y: .5, contact: true, down: false } });
+  await context.onmessage({ data: { type: 'touch', x: .58, y: .5, contact: true, down: false } });
+  assert.deepEqual(seen, [.5, .58], 'the next CPU batch sees the due movement instead of processing stale coordinates');
+  await context.onmessage({ data: { type: 'frame-drawn' } });
+  time = 200; context.tick();
+  core.HEAPU8[0] = 1; time = 201; context.tick();
+  assert.equal(frames, 2, 'held contact stays responsive beyond the 150 ms input-message window');
+});
+
+test('rapid input wakes remain bounded by the guest-clock lead', async () => {
+  const source = (await readFile(new URL('../../src/firebird/worker.js', import.meta.url), 'utf8')).replace(/^import .+;\r?\n/gm, '');
+  let ticks = 0, delay, steps = 0;
+  const core = { HEAPU8: new Uint8Array(320 * 240 * 4), _fb_ticks: () => ticks,
+    _fb_touch() {}, _fb_key() {}, _fb_release() {}, _fb_paint() {},
+    _fb_step() { steps++; ticks += 2; return 1; } };
+  const context = { keyIds, directions, createTouchpadInput, performance: { now: () => 0 }, Date, Uint8Array,
+    postMessage() {}, setTimeout(callback, value) { delay = value; }, clearTimeout() {} };
+  runInNewContext(source + '\nglobalThis.configure = value => { core=value; pixels=0; touchpad=createTouchpadInput(core); resetClock(); };', context);
+  context.configure(core);
+  for (let i = 0; i < 20; i++) await context.onmessage({ data: { type: 'tap', name: 'n1' } });
+  assert.equal(steps, 2, 'message bursts cannot keep running the guest ahead of real time');
+  assert.equal(delay, 20);
+});
+
+test('successful and failed snapshot work cannot become guest-clock catch-up debt', async () => {
+  const source = (await readFile(new URL('../../src/firebird/worker.js', import.meta.url), 'utf8')).replace(/^import .+;\r?\n/gm, '');
+  let ticks = 0, time = 0, fail = false, delay;
+  const messages = [];
+  const core = { HEAPU8: new Uint8Array(320 * 240 * 4), _fb_ticks: () => ticks,
+    _fb_touch() {}, _fb_key() {}, _fb_release() {}, _fb_paint() {},
+    _fb_step() { ticks += 2; return 1; }, _fb_save() { time += 1500; return fail ? 0 : 1; },
+    FS: { readFile() { return new Uint8Array(1); }, unlink() {} } };
+  const context = { keyIds, directions, createTouchpadInput, performance: { now: () => time }, Date, Uint8Array,
+    postMessage(value) { messages.push(value); }, setTimeout(callback, value) { delay = value; }, clearTimeout() {} };
+  runInNewContext(source + '\nglobalThis.configure = value => { core=value; pixels=0; touchpad=createTouchpadInput(core); resetClock(); }; globalThis.tick=step;', context);
+  context.configure(core);
+  for (const failed of [false, true]) {
+    fail = failed;
+    await context.onmessage({ data: { type: 'save', id: failed ? 2 : 1 } }); context.tick();
+    assert.equal(delay, 20, 'the next batch follows guest time rather than racing to repay snapshot time');
+    assert.ok(messages.some(value => value.type === (failed ? 'save-error' : 'saved')));
+  }
 });
