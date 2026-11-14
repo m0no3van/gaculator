@@ -1,5 +1,5 @@
-const VERSION="c4af0987a97b672d";
-const ASSETS=["assets/index-BhkXshpu.css","assets/index-DegVs5m8.js","assets/worker-DRK_tRcf.js","icon-192.png","icon-512.png","icon.svg","index.html","manifest.webmanifest","vendor/firebird-device/boot1.img.gz","vendor/firebird-device/device.json","vendor/firebird-device/flash.img.gz","vendor/firebird/LICENSE.txt","vendor/firebird/build.json","vendor/firebird/compiler-notices.txt","vendor/firebird/firebird.mjs","vendor/firebird/firebird.wasm","vendor/firebird/frontend-notices.txt","vendor/firebird/source.zip"];
+const VERSION="323e7e75dfcd1ee2";
+const ASSETS=["assets/index-C5EFCvhm.css","assets/index-UcYYwayu.js","assets/worker-CbbyAj5U.js","icon-192.png","icon-512.png","icon.svg","index.html","manifest.webmanifest","vendor/firebird-device/boot1.img.gz","vendor/firebird-device/device.json","vendor/firebird-device/flash.img.gz","vendor/firebird/LICENSE.txt","vendor/firebird/build.json","vendor/firebird/compiler-notices.txt","vendor/firebird/firebird.mjs","vendor/firebird/firebird.wasm","vendor/firebird/frontend-notices.txt","vendor/firebird/source.zip"];
 const cachePrefix = `gaculator-${encodeURIComponent(self.registration.scope)}-`;
 const cacheName = `${cachePrefix}${VERSION}`;
 const absoluteAssets = ASSETS.map(path => new URL(path, self.registration.scope).href);

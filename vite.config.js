@@ -27,8 +27,8 @@ export default defineConfig({
       const assets = (await walk()).sort();
       const digest = createHash('sha256');
       for (const path of assets) digest.update(path).update(await readFile(resolve(root, path)));
-      const version = digest.digest('hex').slice(0, 16);
       const source = await readFile('src/firebird/service-worker.js', 'utf8');
+      const version = digest.update(source).digest('hex').slice(0, 16);
       await writeFile(resolve(root, 'sw.js'), `const VERSION=${JSON.stringify(version)};\nconst ASSETS=${JSON.stringify(assets)};\n${source}`);
       console.log(`Offline manifest: ${assets.length} assets, build ${version}`);
     },

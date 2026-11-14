@@ -4,7 +4,9 @@ import { createTouchpadInput } from './touchpad.js';
 let core, pixels, timer, paused = false, failed = false, taps = [], activeTap, releaseAt = 0;
 let identity;
 let touchpad;
+let clockTime = 0, clockTicks = 0, lastFrameTime = -Infinity, framePending = false;
 const send = (type, fields = {}, transfer = []) => postMessage({ type, ...fields }, transfer);
+function resetClock() { clockTime = performance.now(); clockTicks = core._fb_ticks(); }
 async function checked(url, hash) {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`Cannot load ${new URL(url).pathname} (${response.status})`);
@@ -13,9 +15,11 @@ async function checked(url, hash) {
   if (actual !== hash) throw new Error('Device/runtime checksum mismatch; reconnect and rebuild the package.');
   return data;
 }
-function setTap(tap, down) {
+function setModifiers(tap, down) {
   if (tap.ctrl) core._fb_key(keyIds.ctrl, down);
   if (tap.shift) core._fb_key(keyIds.shift, down);
+}
+function setTap(tap, down) {
   if (directions[tap.name]) {
     core._fb_touch(...directions[tap.name], down, down);
   } else core._fb_key(keyIds[tap.name], down);
@@ -39,18 +43,33 @@ function step() {
   try {
     // Input must span firmware scans even when emulation is slower than wall time.
     const now = core._fb_ticks();
-    if (activeTap && now >= releaseAt) { setTap(activeTap, 0); activeTap = null; releaseAt = now + 4; }
+    if (activeTap && now >= releaseAt) {
+      if (activeTap.preparing) { activeTap.preparing = false; setTap(activeTap, 1); releaseAt = now + 4; }
+      else { setTap(activeTap, 0); setModifiers(activeTap, 0); activeTap = null; releaseAt = now + 2; }
+    }
     if (!activeTap && taps.length && now >= releaseAt && (!taps[0].save || !touchpad.active)) {
       const next = taps.shift();
       if (next.save) snapshot(next.id);
-      else { activeTap = next; setTap(activeTap, 1); releaseAt = now + 10; }
+      else {
+        activeTap = next; setModifiers(activeTap, 1);
+        // Firmware must scan Shift/Ctrl before the primary key (calibrated against OS 4.5.2.8).
+        activeTap.preparing = !!(next.ctrl || next.shift);
+        if (!activeTap.preparing) setTap(activeTap, 1);
+        releaseAt = now + 4;
+      }
     }
     if (!core._fb_step(8)) throw new Error('The emulated system stopped. Reopen to restore the last save.');
     touchpad.flush();
-    core._fb_paint(pixels);
-    const frame = core.HEAPU8.slice(pixels, pixels + 320 * 240 * 4);
-    send('frame', { bytes: frame }, [frame.buffer]);
-    timer = setTimeout(step, 16);
+    const time = performance.now();
+    if (!framePending && time - lastFrameTime >= 1000 / 30) {
+      core._fb_paint(pixels);
+      const frame = core.HEAPU8.slice(pixels, pixels + 320 * 240 * 4);
+      framePending = true; lastFrameTime = time;
+      send('frame', { bytes: frame }, [frame.buffer]);
+    }
+    // Yield promptly when CPU-bound; sleep only when the 100 Hz guest clock is ahead.
+    const ahead = (core._fb_ticks() - clockTicks) * 10 - (time - clockTime);
+    timer = setTimeout(step, Math.max(0, Math.min(16, ahead)));
   } catch (error) { fail(error); }
 }
 function fail(error) { failed = true; clearTimeout(timer); send('error', { message: error.message || String(error) }); }
@@ -79,11 +98,12 @@ async function boot({ base, device, save }) {
   pixels = core._malloc(320 * 240 * 4);
   if (!pixels) throw new Error('Not enough memory for the display.');
   touchpad = createTouchpadInput(core);
-  release(); send('ready', { identity, memory: core.HEAPU8.byteLength }); step();
+  release(); resetClock(); send('ready', { identity, memory: core.HEAPU8.byteLength }); step();
 }
 onmessage = async ({ data }) => {
   try {
     if (data.type === 'boot') { await boot(data); return; }
+    if (data.type === 'frame-drawn') { framePending = false; return; }
     if (!core || failed) throw new Error('Emulator is unavailable; the last save has been retained.');
     if (data.type === 'tap' && (Number.isInteger(keyIds[data.name]) || directions[data.name])) {
       if (taps.length < 64) taps.push({ name: data.name, ctrl: !!data.ctrl, shift: !!data.shift });
@@ -93,7 +113,7 @@ onmessage = async ({ data }) => {
       if (paused) snapshot(data.id);
       else taps.push({ save: true, id: data.id });
     } else if (data.type === 'pause') {
-      release(); paused = !!data.value; clearTimeout(timer); if (!paused) step();
+      release(); paused = !!data.value; clearTimeout(timer); if (!paused) { resetClock(); step(); }
     }
   } catch (error) {
     if (data.type === 'save') send('save-error', { id: data.id, message: error.message });

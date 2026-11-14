@@ -6,17 +6,17 @@
       "size": 0,
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
-    "assets/index-BhkXshpu.css": {
-      "size": 7734,
-      "sha256": "ea69b9ccc315cd94a8d0e396ffacdc69d184e1de1a5aed7afcb6d398ddfa50fd"
+    "assets/index-C5EFCvhm.css": {
+      "size": 9892,
+      "sha256": "6665ea7b6fc4ad3682be923b30e5265c567f902830b80a3ebc3cef707bba351e"
     },
-    "assets/index-DegVs5m8.js": {
-      "size": 80611,
-      "sha256": "dfce34d1bc701b55c7946a0e1729827ebc2ec7d78a0d2c85bde82f9e1e526862"
+    "assets/index-UcYYwayu.js": {
+      "size": 86360,
+      "sha256": "f96cfb376163467b43aedfdd47b9b0eb2125a2f1e51557301412840a0fb957a6"
     },
-    "assets/worker-DRK_tRcf.js": {
-      "size": 4907,
-      "sha256": "997de8c3f25376e233805b9b0f3d89cf39a7d6c90c5c9b1453a2e9b9949c9f67"
+    "assets/worker-CbbyAj5U.js": {
+      "size": 5255,
+      "sha256": "07ed838f4618715b6c7e9363d4173510d4569d784057e92a02d84b1ff04b064b"
     },
     "icon-192.png": {
       "size": 1705,
@@ -31,8 +31,8 @@
       "sha256": "b3c1aeab57374cc76ed8dd19d3e784fe1281ec89c17fa46aab9c65a8e32d975c"
     },
     "index.html": {
-      "size": 744,
-      "sha256": "2293a74099cbd403c087162cfd4f92488f024aadb6dc07d82a8579138eff8547"
+      "size": 891,
+      "sha256": "d63c2079368176c60de6c463ad9848139a0916fb787f7b4893912d60190f4d73"
     },
     "manifest.webmanifest": {
       "size": 470,
@@ -40,7 +40,7 @@
     },
     "sw.js": {
       "size": 2169,
-      "sha256": "7a6b5522ca985ba917f9b0487a6c08c121d1d2c29c4d00be5792ddcb1af24d18"
+      "sha256": "00d516b09ef3aa4e5b1bfa4bf1bfa53a8e1b554366584dfc8051dc499d891a21"
     },
     "vendor/firebird-device/boot1.img.gz": {
       "size": 152104,
@@ -79,8 +79,8 @@
       "sha256": "913013ac5797f151774ccfba0b7424ae79aa9019f453b6954fa7ee50c1895a5c"
     },
     "vendor/firebird/source.zip": {
-      "size": 289677,
-      "sha256": "07993f65453bec224430742543f9f89d2a1eab8755a12c50bd3e94303dddb224"
+      "size": 303959,
+      "sha256": "68769e9d44808150b7a25f3d6c9cdfee45767708c8f81ba9dee6a12b03823bec"
     }
   }
 }

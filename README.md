@@ -19,12 +19,14 @@ npm run serve
 
 本地试用直接运行 `npm start`，在电脑浏览器打开 `http://localhost:4173/`，无需证书；服务器默认仅监听本机。正式分发使用 GitHub Pages：`npm run pages:package` 生成带发布流程的 `temp/gaculator-github-pages.zip`，解压后按 [发布说明](docs/github-pages.md) 上传。Pages 的可信 HTTPS 无需用户安装证书描述文件；目标仓库为 [m0no3van/gaculator](https://github.com/m0no3van/gaculator)，发布状态以 Actions 为准。原 `npm run lan` 证书引导保留为可选局域网测试工具，见 [分发、架构与验收](docs/firebird-pwa.md)。
 
-当前界面仅保留屏幕与键盘，自动存档和后台缓存继续。触控板区分滑动与点击；真实 WASM 图形页已验证光标移动。19 项测试与构建通过；原有冷启动、数学、存档恢复证据见文档。按键区域有分区反馈；Safari 只尝试可信原生开关的单次系统轻触，不能控制分区强度。iPhone 震感和真机离线冷启动尚未验收。运行内存约 331 MB。
+当前主界面保留屏幕与完整键盘；屏幕右上角“⋯”提供缓存状态与卸载前清理。首次完成离线缓存后才启动 Worker，避免重复下载镜像；后续本机加载仍需解压和初始化。手机界面按动态可视高度与安全区适配，整页不滚动。自动存档保留。Worker 改为按虚拟时钟安排运行、30 FPS 且最多一帧在途；按下即输入。Shift + 加号为积分、Shift + 减号为求导，修饰键提前扫描已在真实 OS 验证。键盘外观参考 TI 官方 CX CAS 图片。触控板区分滑动与点击；真实 WASM 图形页已验证光标移动。25 项测试与构建通过；原有冷启动、数学、存档恢复证据见文档。按键区域有分区反馈；Safari 只尝试可信原生开关的单次系统轻触，不能控制分区强度。iPhone 震感和真机离线冷启动尚未验收。运行内存约 331 MB。
 
 ```powershell
 npm test
 npm run test:wasm
 npm run test:touchpad
+npm run test:keyboard
+npm run test:performance
 npm run check:docs
 npm run check:delivery -- http://127.0.0.1:4173/
 ```
@@ -33,7 +35,7 @@ npm run check:delivery -- http://127.0.0.1:4173/
 
 镜像包可能含 NAND 中原有的文档。用户已于 2026-11-14 明确允许将完整运行包公开上传至 `m0no3van/gaculator`；证书私钥、原 Snapshot、浏览器存档和其他临时文件仍不发布。Firebird 的 GPLv3 不授予 TI 镜像再分发权。
 
-发布包支持根站点及仓库子路径，缓存/存档按路径隔离。实际 GitHub Actions、正式地址和手机离线冷启动尚未验收。见 [Pages 发布说明](docs/github-pages.md)。
+发布包支持根站点及仓库子路径，缓存/存档按路径隔离。本地停服后缓存重开已验证；手机离线冷启动尚未验收。见 [Pages 发布说明](docs/github-pages.md)。
 
 ## English
 
@@ -45,10 +47,10 @@ Use the commands above. Emscripten **3.1.74** builds the core once; subsequent a
 
 For local preview, run `npm start` and open `http://localhost:4173/` on the computer without certificates. The server listens on loopback by default. `npm run pages:package` prepares `temp/gaculator-github-pages.zip` with its Pages workflow; follow the [deployment guide](docs/github-pages.en.md). Pages trusted HTTPS needs no user certificate profile. The target is [m0no3van/gaculator](https://github.com/m0no3van/gaculator); Actions determines deployment status. The optional `npm run lan` certificate helper remains available for LAN testing; see [architecture and acceptance](docs/firebird-pwa.en.md).
 
-The UI now contains only LCD/keypad, retaining autosave/background caching. Touchpad slides/clicks are distinct; actual WASM graph cursor movement is verified. Nineteen tests/build pass; prior boot/math/snapshot evidence is documented. Key regions have distinct feedback; Safari attempts a trusted native-switch system tick, without programmable regional intensity. iPhone physical haptics and disconnected cold start remain unverified. WASM memory is about 331 MB.
+The main UI contains LCD/full keypad, with cache status and explicit pre-uninstall cleanup under “⋯”. Initial precaching finishes before Worker startup to avoid duplicate device downloads; later local loads still decompress and initialize the core. The phone layout fits the dynamic viewport and safe areas without page scrolling. Autosave remains. Guest-clock pacing replaces fixed Worker sleeps; rendering is capped at 30 FPS with one frame in flight, and input starts on pointerdown. Modifier lead-in fixes Shift+plus integral and Shift+minus derivative chords, verified in the real OS. The keyboard appearance follows TI’s official CX CAS product photo. Touchpad slides/clicks are distinct; actual WASM graph cursor movement is verified. Twenty-five tests/build pass; prior boot/math/snapshot evidence is documented. Key regions have distinct feedback; Safari attempts a trusted native-switch system tick, without programmable regional intensity. iPhone physical haptics and disconnected cold start remain unverified. WASM memory is about 331 MB.
 
 The former CAS/editor dependencies were removed. After specific user confirmation, 103 old source/doc/test/tool/resource entries totaling about 55 MB were deleted. See [cleanup record](docs/firebird-cleanup.en.md). The earlier project is archived under ignored `temp/legacy-before-firebird.zip`.
 
 The NAND may contain existing documents. On 2026-11-14 the user explicitly authorized public upload of the complete runtime to `m0no3van/gaculator`. Certificate private keys, original Snapshot, browser saves and unrelated temporary files remain excluded. Firebird's GPLv3 does not grant redistribution rights to TI firmware.
 
-The release supports root/project URLs with isolated caches and saves. Actual GitHub Actions, production URLs and phone offline cold start remain unaccepted. See the [Pages deployment guide](docs/github-pages.en.md).
+The release supports root/project URLs with isolated caches and saves. Cached reload after stopping the local server is verified; phone offline cold start remains unaccepted. See the [Pages deployment guide](docs/github-pages.en.md).

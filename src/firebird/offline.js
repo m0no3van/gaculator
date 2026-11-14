@@ -24,19 +24,24 @@ export async function prepareOffline(report) {
     };
     watch();
     registration.addEventListener('updatefound', watch);
-    const check = () => {
+    const check = () => new Promise(resolve => {
       const channel = new MessageChannel();
-      const timer = setTimeout(() => report('离线检查失败，请重试 / Offline check failed; retry'), 10000);
+      const finish = (message, ready = false) => { clearTimeout(timer); channel.port1.close(); report(message); resolve(ready); };
+      const timer = setTimeout(() => finish('离线检查失败，请重试 / Offline check failed; retry'), 10000);
       channel.port1.onmessage = ({ data }) => {
-        clearTimeout(timer); channel.port1.close();
-        report(data.ready ? '离线资源已就绪 / Offline assets ready' : '资源不完整，请联网重试 / Assets incomplete; reconnect');
+        finish(data.ready ? '离线资源已就绪 / Offline assets ready' : '资源不完整，请联网重试 / Assets incomplete; reconnect', data.ready);
       };
-      if (navigator.serviceWorker.controller) navigator.serviceWorker.controller.postMessage('CHECK', [channel.port2]);
-      else { clearTimeout(timer); report('请重新打开以完成离线准备 / Reopen to finish offline setup'); }
-    };
+      registration.active.postMessage('CHECK', [channel.port2]);
+    });
     navigator.serviceWorker.addEventListener('controllerchange', check);
-    await Promise.race([navigator.serviceWorker.ready, failedInstall]);
-    check();
+    let timeout;
+    try {
+      await Promise.race([navigator.serviceWorker.ready, failedInstall, new Promise((_, reject) => {
+        timeout = setTimeout(() => reject(new Error('Offline installation timed out')), 120000);
+      })]);
+    } finally { clearTimeout(timeout); }
+    const ready = await check();
     update();
+    return ready;
   } catch { report('离线准备失败，请联网重试 / Offline setup failed; reconnect and retry'); }
 }

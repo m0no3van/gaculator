@@ -17,6 +17,8 @@
     "pages:package": "npm run build && python -B -X utf8 tools/package-pages.py",
     "test:wasm": "node tools/test-firebird.mjs",
     "test:touchpad": "node tools/test-touchpad.mjs",
+    "test:keyboard": "node tools/test-keyboard.mjs",
+    "test:performance": "node tools/test-performance.mjs",
     "check:docs": "python -B -X utf8 tools/check_docs.py",
     "check:delivery": "node tools/check-delivery.mjs",
     "prepare:assets": "python -B -X utf8 tools/build-firebird.py --source-only && node tools/package-firebird.mjs",

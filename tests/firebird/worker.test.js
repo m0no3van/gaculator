@@ -21,16 +21,41 @@ test('autosave runs between queued keys, keeps later input, and failed snapshots
   await context.onmessage({ data: { type: 'tap', name: 'n1' } });
   await context.onmessage({ data: { type: 'save', id: 7 } });
   await context.onmessage({ data: { type: 'tap', name: 'n2' } });
-  context.tick(); now = 10; context.tick(); now = 14; context.tick(); now = 16; context.tick();
+  context.tick(); now = 4; context.tick(); now = 6; context.tick(); now = 8; context.tick();
   assert.deepEqual(events, [[keyIds.n1, 1], [keyIds.n1, 0], 'save', [keyIds.n2, 1]]);
   assert.equal(messages[0].type, 'saved'); assert.equal(messages[0].id, 7);
   fail = true;
   await context.onmessage({ data: { type: 'save', id: 8 } });
-  now = 26; context.tick(); now = 30; context.tick();
+  now = 12; context.tick(); now = 14; context.tick();
   assert.equal(messages.at(-1).type, 'save-error'); assert.equal(messages.at(-1).id, 8);
   await context.onmessage({ data: { type: 'touch', x: 0.5, y: 0.5, contact: true, down: true } });
   await context.onmessage({ data: { type: 'touch', x: 0.5, y: 0.5, contact: false, down: false } });
   now = 35; context.tick(); assert.deepEqual(events.at(-1), [0.5, 0.5, 1, 1]);
   now = 40; context.tick(); assert.deepEqual(events.at(-1), [0.5, 0.5, 1, 1]);
   now = 45; context.tick(); assert.deepEqual(events.at(-1), [0.5, 0.5, 0, 0]);
+});
+
+test('modifiers lead the primary key on guest ticks, frames have backpressure, and resume resets pacing', async () => {
+  const source = (await readFile(new URL('../../src/firebird/worker.js', import.meta.url), 'utf8')).replace(/^import .+;\r?\n/gm, '');
+  let ticks = 0, time = 0, frames = 0, delay;
+  const keys = [];
+  const core = { HEAPU8: new Uint8Array(320 * 240 * 4), _fb_ticks: () => ticks,
+    _fb_key(id, down) { keys.push([id, down, ticks]); }, _fb_release() {}, _fb_touch() {}, _fb_paint() {},
+    _fb_step(budget) { assert.equal(budget, 8); ticks += 2; return 1; } };
+  const context = { keyIds, directions, createTouchpadInput, performance: { now: () => time }, Date, Uint8Array,
+    postMessage(value) { if (value.type === 'frame') frames++; }, setTimeout(callback, value) { delay = value; return 1; }, clearTimeout() {} };
+  runInNewContext(source + '\nglobalThis.configure = value => { core=value; touchpad=createTouchpadInput(core); pixels=0; resetClock(); }; globalThis.tick=step;', context);
+  context.configure(core);
+  await context.onmessage({ data: { type: 'tap', name: 'plus', shift: true } });
+  for (time = 0; time <= 80; time += 20) context.tick();
+  assert.deepEqual(keys, [[keyIds.shift, 1, 0], [keyIds.plus, 1, 4], [keyIds.plus, 0, 8], [keyIds.shift, 0, 8]]);
+  assert.equal(frames, 1, 'a slow main thread cannot accumulate framebuffer messages');
+  await context.onmessage({ data: { type: 'frame-drawn' } });
+  time = 120; context.tick(); assert.equal(frames, 2);
+  await context.onmessage({ data: { type: 'pause', value: true } });
+  time = 50000;
+  await context.onmessage({ data: { type: 'pause', value: false } });
+  assert.equal(delay, 16, 'background time is not an emulation catch-up debt');
+  time += 200; context.tick();
+  assert.equal(delay, 0, 'CPU-bound emulation yields without the former mandatory 16 ms sleep');
 });

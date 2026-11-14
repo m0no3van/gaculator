@@ -37,6 +37,10 @@ onBeforeUnmount(() => {
         <div ref="pad" class="hh-touchpad"
           @pointerdown="down" @pointermove="gesture.move" @pointerup="gesture.end" @pointercancel="gesture.cancel"
           @lostpointercapture="gesture.cancel" @contextmenu.prevent>
+          <span class="hh-pad-mark hh-pad-mark-up" aria-hidden="true">▴</span>
+          <span class="hh-pad-mark hh-pad-mark-right" aria-hidden="true">▸</span>
+          <span class="hh-pad-mark hh-pad-mark-down" aria-hidden="true">▾</span>
+          <span class="hh-pad-mark hh-pad-mark-left" aria-hidden="true">◂</span>
           <span v-if="touching" class="hh-pad-contact" :style="{ left: `${point.x * 100}%`, top: `${point.y * 100}%` }" aria-hidden="true"></span>
           <button v-for="(point, direction) in directions" :key="direction" type="button" :class="`hh-pad-${direction}`"
             :aria-label="direction" @click="event => { if (event.detail === 0) press(direction); }">

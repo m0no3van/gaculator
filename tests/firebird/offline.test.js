@@ -77,7 +77,7 @@ test('failed first Service Worker installation reports failure instead of waitin
   const states = {};
   const installing = { state: 'installing', addEventListener(type, handler) { states[type] = handler; } };
   const registration = { installing, active: null, waiting: null, addEventListener() {} };
-  const context = { window: { isSecureContext: true }, navigator: { serviceWorker: {
+  const context = { setTimeout, clearTimeout, window: { isSecureContext: true }, navigator: { serviceWorker: {
     async register() { return registration; }, ready: new Promise(() => {}), addEventListener() {},
   } } };
   runInNewContext(offline.replaceAll('export ', '').replace('import.meta.env.DEV', 'false')
@@ -89,4 +89,37 @@ test('failed first Service Worker installation reports failure instead of waitin
   await pending;
   assert.match(messages.at(-1), /Offline setup failed/);
   assert.equal(messages.some(message => /Offline assets ready/.test(message)), false);
+});
+
+test('first launch waits for the complete cache even before this page has a controller', async () => {
+  const offline = await readFile(new URL('../../src/firebird/offline.js', import.meta.url), 'utf8');
+  let installed, reply, checkTimeout;
+  const registration = { active: { postMessage(message, ports) {
+    assert.equal(message, 'CHECK'); reply = ports[0];
+  } }, addEventListener() {} };
+  class Channel {
+    constructor() {
+      this.port1 = { close() {} };
+      this.port2 = { postMessage: data => this.port1.onmessage({ data }) };
+    }
+  }
+  const context = { window: { isSecureContext: true }, navigator: { serviceWorker: {
+    controller: null, async register() { return registration; },
+    ready: new Promise(resolve => { installed = resolve; }), addEventListener() {},
+  } }, MessageChannel: Channel, setTimeout(callback, delay) { if (delay === 10000) checkTimeout = callback; return 1; }, clearTimeout() {} };
+  runInNewContext(offline.replaceAll('export ', '').replace('import.meta.env.DEV', 'false')
+    + '\nglobalThis.prepare = prepareOffline;', context);
+  const messages = [];
+  let finished = false;
+  const pending = context.prepare(message => messages.push(message)).then(value => { finished = true; return value; });
+  await new Promise(setImmediate);
+  assert.equal(finished, false);
+  assert.equal(reply, undefined);
+  installed(registration);
+  await new Promise(setImmediate);
+  assert.equal(finished, false);
+  reply.postMessage({ ready: true });
+  assert.equal(await pending, true);
+  assert.match(messages.at(-1), /Offline assets ready/);
+  assert.equal(typeof checkTimeout, 'function');
 });

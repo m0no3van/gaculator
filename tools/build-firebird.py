@@ -22,7 +22,8 @@ def archive_source():
                 if path.is_file():
                     archive.write(path, path.relative_to(ROOT).as_posix())
         for name in ['tools/build-firebird.py', 'tools/package-firebird.mjs', 'tools/serve.mjs',
-                     'tools/test-firebird.mjs', 'tools/test-touchpad.mjs', 'tools/check-delivery.mjs', 'tools/check_docs.py', 'tools/lan-firebird.mjs',
+                     'tools/test-firebird.mjs', 'tools/test-touchpad.mjs', 'tools/test-keyboard.mjs', 'tools/test-performance.mjs',
+                     'tools/check-delivery.mjs', 'tools/check_docs.py', 'tools/lan-firebird.mjs',
                      'tools/package-pages.py', '.github/workflows/pages.yml', '.github/scripts/check-pages.py',
                      'vite.config.js', 'package.json', 'package-lock.json', 'index.html', 'LICENSE', 'README.md',
                      'docs/firebird-pwa.md', 'docs/firebird-pwa.en.md', 'docs/github-pages.md', 'docs/github-pages.en.md']:

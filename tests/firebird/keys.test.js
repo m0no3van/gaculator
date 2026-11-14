@@ -13,6 +13,15 @@ test('every physical key matches the pinned upstream matrix and the UI uses vali
   assert.deepEqual(keys.map(k => k.name).sort(), Object.keys(keyIds).sort());
 });
 
+test('calculus chords retain Shift on subtraction/numpad addition without changing normal plus typing', () => {
+  assert.deepEqual(browserKey({ key: '_', shiftKey: true, code: 'Minus' }), { name: 'minus', ctrl: false, shift: true });
+  assert.deepEqual(browserKey({ key: '-', shiftKey: true, code: 'NumpadSubtract' }), { name: 'minus', ctrl: false, shift: true });
+  assert.deepEqual(browserKey({ key: '+', shiftKey: true, code: 'NumpadAdd' }), { name: 'plus', ctrl: false, shift: true });
+  assert.deepEqual(browserKey({ key: '+', shiftKey: true, code: 'Equal' }), { name: 'plus', ctrl: false, shift: false });
+  assert.match(layout.rows.flat().find(key => key.name === 'plus').legend, /∫/);
+  assert.match(layout.rows.flat().find(key => key.name === 'minus').legend, /d\/dx/);
+});
+
 test('browser punctuation uses calculator keys without leaking host Shift; Ctrl+/ stays a fraction chord', () => {
   assert.deepEqual(browserKey({ key: '(', shiftKey: true }), { name: 'pleft', ctrl: false, shift: false });
   assert.deepEqual(browserKey({ key: '/', ctrlKey: true }), { name: 'div', ctrl: true, shift: false });
