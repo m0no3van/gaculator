@@ -20,23 +20,27 @@ function press(name) {
   if (name === 'ctrl' || name === 'shift') { modifiers[name] = !modifiers[name]; return; }
   emit('tap', { name, ...modifiers }); modifiers.ctrl = modifiers.shift = false;
 }
+function insideRegion(event, target) {
+  const rect = target.getBoundingClientRect();
+  return event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom
+    && document.elementFromPoint(event.clientX, event.clientY)?.closest('.hh-pad-key') === target;
+}
 function down(event) {
   nativeTapReady = undefined;
   const target = event.target.closest('.hh-pad-key');
-  const rect = target?.getBoundingClientRect();
-  if (rect && (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom)) {
+  if (target && !insideRegion(event, target)) {
+    activations[target.dataset.direction].markPointer();
     event.preventDefault(); return;
   }
   if (gesture.start(event, pad.value.getBoundingClientRect())) {
-    direction = target?.dataset.direction; region = rect;
+    direction = target?.dataset.direction; region = target;
     if (direction) activations[direction].markPointer();
     if (!nativeSwitch) event.preventDefault();
     (target || pad.value).setPointerCapture(event.pointerId); vibrateFeedback('touchpad');
   } else event.preventDefault();
 }
 function up(event) {
-  if (gesture.pointerId === event.pointerId && region
-    && (event.clientX < region.left || event.clientX > region.right || event.clientY < region.top || event.clientY > region.bottom)) direction = undefined;
+  if (gesture.pointerId === event.pointerId && region && !insideRegion(event, region)) direction = undefined;
   gesture.end(event);
 }
 function click(event, name) {

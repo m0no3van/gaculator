@@ -65,7 +65,7 @@
 .handheld-keyboard .hh-pad-down { inset: 60% 25% 0; }
 .handheld-keyboard .hh-pad-left { inset: 20% 64% 20% 0; }
 .handheld-keyboard .hh-pad-right { inset: 20% 0 20% 64%; }
-.handheld-keyboard .hh-touchpad .hh-pad-select { top: 50%; left: 50%; width: 9.6cqw; height: calc(9.6 * var(--hh-y)); transform: translate(-50%, -50%); border: .42cqw solid white; border-radius: 2.5cqw; }
+.handheld-keyboard .hh-touchpad .hh-pad-select { top: calc(7.6 * var(--hh-y)); left: 15.1cqw; width: 13.2cqw; height: calc(13.2 * var(--hh-y)); border: .42cqw solid white; border-radius: 3.4cqw; }
 .handheld-keyboard .hh-pad-contact { position: absolute; width: 5cqw; height: calc(5 * var(--hh-y)); border-radius: 50%; background: #69cada60; transform: translate(-50%, -50%); pointer-events: none; }
 
 .handheld-keyboard .hh-modifiers { height: calc(16 * var(--hh-y)); padding: calc(4.6 * var(--hh-y)) 2cqw 0; display: grid; grid-template-columns: repeat(4, 12.7cqw); justify-content: space-between; }
