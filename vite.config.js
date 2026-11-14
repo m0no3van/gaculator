@@ -29,7 +29,11 @@ export default defineConfig({
       for (const path of assets) digest.update(path).update(await readFile(resolve(root, path)));
       const source = await readFile('src/firebird/service-worker.js', 'utf8');
       const version = digest.update(source).digest('hex').slice(0, 16);
-      await writeFile(resolve(root, 'sw.js'), `const VERSION=${JSON.stringify(version)};\nconst ASSETS=${JSON.stringify(assets)};\n${source}`);
+      const index = resolve(root, 'index.html');
+      await writeFile(index, (await readFile(index, 'utf8')).replace('</head>', `  <meta name="gaculator-build" content="${version}">\n  </head>`));
+      const hashes = {};
+      for (const path of assets) hashes[path] = createHash('sha256').update(await readFile(resolve(root, path))).digest('hex');
+      await writeFile(resolve(root, 'sw.js'), `const VERSION=${JSON.stringify(version)};\nconst ASSETS=${JSON.stringify(assets)};\nconst HASHES=${JSON.stringify(hashes)};\n${source}`);
       console.log(`Offline manifest: ${assets.length} assets, build ${version}`);
     },
   }],

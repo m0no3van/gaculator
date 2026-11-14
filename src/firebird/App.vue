@@ -116,20 +116,20 @@ async function start() {
 onMounted(async () => {
   window.addEventListener('keydown', keyboard);
   document.addEventListener('visibilitychange', visibility);
-  // Finish the first precache before the Worker fetches the same large NAND.
-  await prepareOffline(message => { offline.value = message; });
-  preparing.value = false;
   try {
     if (!navigator.locks) throw new Error('需要支持 Web Locks 的安全浏览器 / Secure browser with Web Locks required');
     navigator.locks.request(`${namespace}-session`, { ifAvailable: true }, async lock => {
       if (!lock) throw new Error('请关闭另一个计算器窗口 / Close the other calculator window');
       ownsLock = true;
       try {
+        // Check/switch versions only while no other emulator can be writing a save.
+        if (await prepareOffline(message => { offline.value = message; }) === 'reloading') return;
+        preparing.value = false;
         await start(); starting.value = false;
         await new Promise(resolve => { releaseLock = resolve; });
       } finally { ownsLock = false; }
-    }).catch(problem => { starting.value = false; showError(problem); });
-  } catch (problem) { starting.value = false; showError(problem); }
+    }).catch(problem => { preparing.value = starting.value = false; showError(problem); });
+  } catch (problem) { preparing.value = starting.value = false; showError(problem); }
 });
 onBeforeUnmount(() => {
   autosave?.stop(); worker?.terminate(); db?.close(); releaseLock?.();

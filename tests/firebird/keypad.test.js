@@ -12,14 +12,14 @@ function fixture(nativeSwitch = false) {
   const events = [], feedback = [], captures = [], tasks = new Map(); let taskId = 0;
   const timers = { setTimeout(callback) { tasks.set(++taskId, callback); return taskId; }, clearTimeout(id) { tasks.delete(id); } };
   const rect = { left: 0, top: 0, right: 200, bottom: 100, width: 200, height: 100 };
-  const zones = { right: { left: 128, top: 20, right: 200, bottom: 80 }, select: { left: 68, top: 25, right: 128, bottom: 75 } };
+  const zones = { right: { left: 128, top: 20, right: 200, bottom: 80 }, select: { left: 78, top: 32, right: 122, bottom: 68 } };
   const region = name => ({ dataset: { direction: name }, getBoundingClientRect: () => zones[name],
     setPointerCapture: id => captures.push([name, id]) });
   const pad = { getBoundingClientRect: () => rect, setPointerCapture: id => captures.push(['pad', id]) };
   const context = { defineEmits: () => (...args) => events.push(args), reactive: value => value, ref: value => ({ value }),
     onMounted() {}, onBeforeUnmount() {}, directions, createTouchpadGesture, createKeyActivation: run => createKeyActivation(run, timers),
     supportsSwitchHaptics: () => nativeSwitch, vibrateFeedback: kind => feedback.push(kind) };
-  runInNewContext(source + '\npad.value = testPad; globalThis.handlers = { down, up: gesture.end, move: gesture.move, lostCapture, cancel, click, keyboard, press, fallback: name => activations[name].fallback({ type: "change" }) };', Object.assign(context, { testPad: pad }));
+  runInNewContext(source + '\npad.value = testPad; globalThis.handlers = { down, up, move: gesture.move, lostCapture, cancel, click, keyboard, press, fallback: name => activations[name].fallback({ type: "change" }) };', Object.assign(context, { testPad: pad }));
   const event = (name, options = {}) => ({ pointerId: 1, button: 0, isPrimary: true,
     clientX: name === 'right' ? 170 : 100, clientY: 50, target: { closest: () => region(name) },
     preventDefault() { this.prevented = true; }, ...options });
@@ -49,6 +49,55 @@ test('pad sliding and cancellation preserve cursor contact without a direction p
   pad.down('right'); pad.handlers.cancel({ type: 'blur' }); pad.up('right');
   assert.deepEqual(pad.taps(), []);
   assert.equal(pad.feedback.filter(kind => kind === 'control').length, 0);
+});
+
+test('blank pad gaps never confirm, preserve modifiers and still allow sliding', () => {
+  for (const native of [false, true]) {
+    const pad = fixture(native), gap = { clientX: 125, target: { closest: () => null } };
+    pad.handlers.press('ctrl'); pad.down('select', gap); pad.up('select', gap);
+    assert.deepEqual(pad.taps(), []);
+    assert.equal(pad.feedback.filter(kind => kind === 'control').length, 0);
+    assert.deepEqual(pad.captures, [['pad', 1]]);
+    pad.down('select', gap); pad.move('select', { clientX: 150 }); pad.up('select', { clientX: 150 });
+    assert.deepEqual(pad.taps(), []);
+    pad.down('right'); pad.up('right');
+    assert.deepEqual(pad.taps(), [{ name: 'right', ctrl: true, shift: false }]);
+  }
+});
+
+test('center requires both press and release inside its reduced visible region', () => {
+  for (const native of [false, true]) {
+    const pad = fixture(native);
+    const missed = pad.down('select', { clientX: 125 });
+    assert.equal(missed.prevented, true, 'expanded browser hit testing cannot restore the old center area');
+    assert.deepEqual(pad.taps(), []);
+    for (const [start, end] of [[{ clientX: 121 }, { clientX: 123 }], [{ clientY: 33 }, { clientY: 31 }]]) {
+      pad.down('select', start); pad.up('select', end);
+      const click = { detail: native ? 0 : 1, preventDefault() { this.prevented = true; } };
+      pad.handlers.click(click, 'select'); pad.endTask();
+      if (native) assert.equal(click.prevented, true);
+      assert.deepEqual(pad.taps(), [], 'crossing the boundary by two pixels cannot confirm');
+    }
+    pad.down('select'); pad.up('select');
+    pad.handlers.click({ detail: 0, preventDefault() {} }, 'select');
+    if (native) pad.handlers.fallback('select');
+    assert.deepEqual(pad.taps(), [{ name: 'select', ctrl: false, shift: false }]);
+  }
+});
+
+test('an unrelated finger release cannot disarm the owned center press', () => {
+  const pad = fixture(); pad.down('select'); pad.up('select', { pointerId: 2, clientX: 200 });
+  assert.deepEqual(pad.taps(), []);
+  pad.up('select'); assert.deepEqual(pad.taps(), [{ name: 'select', ctrl: false, shift: false }]);
+});
+
+test('a rejected native press cannot reuse an older tap whose default click never arrived', () => {
+  const pad = fixture(true); pad.down('select'); pad.up('select');
+  pad.down('select', { clientX: 125 });
+  const click = { preventDefault() { this.prevented = true; } };
+  pad.handlers.click(click, 'select');
+  assert.equal(click.prevented, true);
+  assert.equal(pad.taps().length, 1);
 });
 
 test('native pad labels allow only owned settled taps and consume their default change', () => {

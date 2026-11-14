@@ -9,11 +9,11 @@ const emit = defineEmits(['tap', 'touch', 'reload-request']);
 const modifiers = reactive({ ctrl: false, shift: false });
 const pad = ref();
 const nativeSwitch = supportsSwitchHaptics();
-let direction = 'select', nativeTapReady;
+let direction, region, nativeTapReady;
 const touching = ref(false), point = reactive({ x: 0.5, y: 0.5 });
 const gesture = createTouchpadGesture(value => {
   touching.value = value.contact; Object.assign(point, { x: value.x, y: value.y }); emit('touch', value);
-}, () => { nativeTapReady = direction; activateDirection(direction); });
+}, () => { if (direction) { nativeTapReady = direction; activateDirection(direction); } });
 const activations = Object.fromEntries(Object.keys(directions).map(name => [name, createKeyActivation(() => activateDirection(name))]));
 function activateDirection(name) { vibrateFeedback('control'); press(name); }
 function press(name) {
@@ -21,17 +21,23 @@ function press(name) {
   emit('tap', { name, ...modifiers }); modifiers.ctrl = modifiers.shift = false;
 }
 function down(event) {
+  nativeTapReady = undefined;
   const target = event.target.closest('.hh-pad-key');
   const rect = target?.getBoundingClientRect();
   if (rect && (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom)) {
     event.preventDefault(); return;
   }
   if (gesture.start(event, pad.value.getBoundingClientRect())) {
-    direction = target?.dataset.direction || 'select'; nativeTapReady = undefined;
-    activations[direction].markPointer();
+    direction = target?.dataset.direction; region = rect;
+    if (direction) activations[direction].markPointer();
     if (!nativeSwitch) event.preventDefault();
     (target || pad.value).setPointerCapture(event.pointerId); vibrateFeedback('touchpad');
   } else event.preventDefault();
+}
+function up(event) {
+  if (gesture.pointerId === event.pointerId && region
+    && (event.clientX < region.left || event.clientX > region.right || event.clientY < region.top || event.clientY > region.bottom)) direction = undefined;
+  gesture.end(event);
 }
 function click(event, name) {
   if (!nativeSwitch) { activations[name].fallback(event); return; }
@@ -66,7 +72,7 @@ onBeforeUnmount(() => {
           <Key v-for="item in layout[side]" :key="item.name" :item="item" @press="press" @reload-request="emit('reload-request')"/>
         </div>
         <div ref="pad" class="hh-touchpad"
-          @pointerdown="down" @pointermove="gesture.move" @pointerup="gesture.end" @pointercancel="cancel"
+          @pointerdown="down" @pointermove="gesture.move" @pointerup="up" @pointercancel="cancel"
           @lostpointercapture="lostCapture" @contextmenu.prevent>
           <span v-if="touching" class="hh-pad-contact" :style="{ left: `${point.x * 100}%`, top: `${point.y * 100}%` }" aria-hidden="true"></span>
           <component :is="nativeSwitch ? 'label' : 'button'" v-for="(point, name) in directions" :key="name"
