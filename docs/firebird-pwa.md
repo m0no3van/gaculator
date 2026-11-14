@@ -89,7 +89,9 @@ npm run serve
 
 用户截图的底部空白与 [WebKit 313800](https://bugs.webkit.org/show_bug.cgi?id=313800) 中报告的屏幕高 874、视口高 812、顶部安全区 62 的缺口相符；截图本身不能证明设备实际 API 值。`viewport.js` 只在 iOS `navigator.standalone`、未缩放、视口宽度与完整屏幕相符且缺失高度恰等于实测顶部安全区时，使用测量的屏幕高度修正根容器；其他浏览器、正常安装态、分屏与旋转保留正常视口规则。原安全区内边距仍保留；系统合成层若仍裁切，其保留区域不是 CSS 能保证消除的，须真机确认。
 
-重复字母来自按下已发送输入后，Safari 的零-detail 点击又被误判为辅助技术激活。现在追踪本次指针是否已提交，原生开关的默认 change/普通按钮 click 只消费同一次手势，不按 `click.detail` 推断，也不使用会吞掉快速连按的时间防抖。键盘与辅助技术的无指针激活继续保留。
+安装态键盘闪烁还涉及高度补偿的反馈循环：修正后 WebKit 可能交替报告缩短/完整高度。现在同一屏幕几何下保持补偿值，只在值真正改变时写入样式；分屏、窗口尺寸变化或旋转才重新判断。回归测试覆盖 812↔874 连续变化而不反复写入根高度。
+
+重复字母来自按下已发送输入后，Safari 的零-detail 点击又被误判为辅助技术激活。现在追踪本次指针是否已提交，普通按钮 click 只消费同一次手势；不把零-detail 当作辅助激活的充分条件，也不使用会吞掉快速连按的时间防抖。键盘与辅助技术的无指针激活继续保留。DEL 等按键使用固定边界的普通按钮，移除隐藏的原生开关；按压反馈不再移动触摸区域。指针捕获和实测边界检查防止拖动抬手或浏览器扩大命中范围时触发下面的书本键。
 
 ## 操作响应与键盘外观
 
@@ -121,7 +123,7 @@ ON 按住至少五秒后松开，再调用 `window.confirm` 系统原生确认�
 
 ON 长按完成时先尝试 `[30, 40, 30]` ms 震动，再请求确认。[W3C 实现报告](https://w3c.github.io/vibration/reports/implementation.html)确认 WebKit 没有 Vibration API；五秒定时器不能生成可信开关点击，因此 iPhone PWA 不保证这个阈值震动，不用合成点击冒充。
 
-Safari 使用功能检测后由手指直接点击的原生 `<input type="checkbox" switch>` 产生系统轻触，不使用 JavaScript `.click()` 合成震动。[WebKit 官方说明](https://webkit.org/blog/15443/news-from-wwdc24-webkit-in-safari-18-beta/)仅说明单次轻触；[WebKit 当前实现](https://github.com/WebKit/WebKit/blob/main/Source/WebCore/html/CheckboxInputType.cpp)要求可信事件/用户手势。它不是可编程震动 API，不能保证每种硬件、系统版本和设置都震动；Safari 上不同区域的实际震动强度/节奏目前不能兑现，触控板滑动也不伪装成反复点击开关。
+为修复 DEL/书本误触，已移除覆盖按键的 Safari 原生开关震感方案，统一使用普通按钮。支持 Vibration API 的设备保留震动尝试；iPhone PWA 不保证按键或长按阈值震动，也不使用合成点击冒充。按压颜色反馈保留，交互边界保持不动。
 
 若必须在 iPhone 实现轻/中/重、不同纹理及连续触觉，应在保留同一离线 WASM 的前提下增加原生 WKWebView 壳，通过 [UIImpactFeedbackGenerator](https://developer.apple.com/documentation/uikit/uiimpactfeedbackgenerator) 或 Core Haptics 发出原生反馈。这涉及原生签名/安装，不属于本次 PWA 修改；没有为此引入依赖或伪装浏览器已具备该能力。
 

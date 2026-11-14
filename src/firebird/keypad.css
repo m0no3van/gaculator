@@ -18,10 +18,11 @@
 .handheld-keyboard .hh-key-wrap { position: relative; display: block; min-width: 0; }
 .handheld-keyboard .hh-key {
   position: relative;
-  transition: transform 70ms ease-out, background-color 70ms;
+  transition: background-color 70ms;
   display: grid;
   place-items: center;
   width: 100%;
+  min-width: 0;
   height: calc(7.5 * var(--hh-y));
   min-height: 0;
   margin: 0;
@@ -33,20 +34,19 @@
   font: 700 4.5cqw/1 Arial, sans-serif;
   cursor: pointer;
   box-shadow: none;
-  touch-action: manipulation;
+  appearance: none;
+  -webkit-appearance: none;
+  touch-action: none;
 }
 .handheld-keyboard .hh-key:hover { background: #343243; }
 .handheld-keyboard .hh-key:active, .handheld-keyboard .hh-key[aria-pressed="true"] { background: var(--hh-cyan); color: #15232a; }
-.handheld-keyboard .hh-key.hh-active, .handheld-keyboard .hh-key:active { transform: translateY(.5cqw); background: #497b86; }
-.handheld-keyboard .hh-key[data-feedback="operation"]:is(:active, .hh-active) { transform: translateY(.7cqw); background: #3b6679; }
-.handheld-keyboard .hh-key[data-feedback="confirm"]:is(:active, .hh-active) { transform: translateY(1cqw) scale(.97); background: #408575; }
-.handheld-keyboard .native-haptic { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; z-index: 1; cursor: pointer; touch-action: manipulation; }
-.handheld-keyboard .hh-key:has(.native-haptic:focus-visible) { outline: .5cqw solid white; outline-offset: .3cqw; }
-.handheld-keyboard .hh-key:has(.native-haptic[aria-pressed="true"]) { background: var(--hh-cyan); color: #15232a; }
+.handheld-keyboard .hh-key.hh-active, .handheld-keyboard .hh-key:active { background: #497b86; }
+.handheld-keyboard .hh-key[data-feedback="operation"]:is(:active, .hh-active) { background: #3b6679; }
+.handheld-keyboard .hh-key[data-feedback="confirm"]:is(:active, .hh-active) { background: #408575; }
 .handheld-keyboard .hh-key:focus-visible { outline: .5cqw solid white; outline-offset: .3cqw; }
-.handheld-keyboard .hh-face { display: block; white-space: nowrap; line-height: 1; }
+.handheld-keyboard .hh-face { display: block; white-space: nowrap; line-height: 1; pointer-events: none; }
 .handheld-keyboard .hh-face svg { display: block; width: 7.4cqw; height: calc(5.6 * var(--hh-y)); fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
-.handheld-keyboard .hh-legend { position: absolute; left: 0; right: 0; top: calc(-3.8 * var(--hh-y)); color: var(--hh-cyan); font: 700 3.5cqw/1 Arial, sans-serif; text-align: center; white-space: nowrap; }
+.handheld-keyboard .hh-legend { position: absolute; left: 0; right: 0; top: calc(-3.8 * var(--hh-y)); color: var(--hh-cyan); font: 700 3.5cqw/1 Arial, sans-serif; text-align: center; white-space: nowrap; pointer-events: none; }
 
 .handheld-keyboard .hh-navigation { position: relative; height: calc(34 * var(--hh-y)); background: #111; }
 .handheld-keyboard .hh-nav-left, .handheld-keyboard .hh-nav-right { position: absolute; top: calc(2 * var(--hh-y)); bottom: calc(2 * var(--hh-y)); width: 12.7cqw; display: flex; flex-direction: column; justify-content: space-between; }
@@ -92,5 +92,4 @@
 .handheld-keyboard .hh-spacer { display: block; }
 @media (prefers-reduced-motion: reduce) {
   .handheld-keyboard .hh-key { transition: none; }
-  .handheld-keyboard .hh-key[data-feedback]:is(:active, .hh-active) { transform: none; }
 }

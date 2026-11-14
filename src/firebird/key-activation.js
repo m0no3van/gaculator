@@ -1,4 +1,4 @@
-// Safari switch clicks can have detail=0 too; track the pointer activation instead.
+// Pointer input is committed on press; clicks are only a keyboard/assistive fallback.
 export function createKeyActivation(activate, timers = globalThis) {
   let pointerHandled = false, cleanup;
   const reset = () => { timers.clearTimeout(cleanup); pointerHandled = false; };
@@ -9,19 +9,18 @@ export function createKeyActivation(activate, timers = globalThis) {
   return {
     markPointer() { timers.clearTimeout(cleanup); pointerHandled = true; },
     pointerDown(event) {
-      if (event.button !== 0) return;
+      if (event.button !== 0 || event.isPrimary === false) return;
       timers.clearTimeout(cleanup); pointerHandled = true;
       activate();
     },
-    fallback() {
+    fallback(event) {
       const handled = pointerHandled; reset();
-      if (handled) return;
+      if (handled || event?.pointerType || event?.detail > 0 || event?.sourceCapabilities?.firesTouchEvents) return;
       activate();
     },
     keyboard: reset,
-    cancel(nativeSwitch) {
-      // WebKit switches dispatch a default click/change synchronously on touchcancel.
-      if (nativeSwitch && pointerHandled) consumeDefault(); else reset();
+    cancel() {
+      if (pointerHandled) consumeDefault(); else reset();
     },
     consumeDefault,
     reset,
