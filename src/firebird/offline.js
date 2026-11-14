@@ -5,7 +5,7 @@ export async function prepareOffline(report) {
   if (import.meta.env.DEV) { report('开发预览 / Development preview'); return; }
   try {
     report('准备离线… / Preparing offline…');
-    const registration = await navigator.serviceWorker.register('./sw.js', { scope: './' });
+    const registration = await navigator.serviceWorker.register('./sw.js', { scope: './', updateViaCache: 'none' });
     let rejectInstall;
     const failedInstall = new Promise((_, reject) => { rejectInstall = reject; });
     const update = () => {

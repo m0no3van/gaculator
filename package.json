@@ -19,6 +19,7 @@
     "test:touchpad": "node tools/test-touchpad.mjs",
     "test:keyboard": "node tools/test-keyboard.mjs",
     "test:performance": "node tools/test-performance.mjs",
+    "test:latency": "node tools/test-input-latency.mjs",
     "check:docs": "python -B -X utf8 tools/check_docs.py",
     "check:delivery": "node tools/check-delivery.mjs",
     "prepare:assets": "python -B -X utf8 tools/build-firebird.py --source-only && node tools/package-firebird.mjs",

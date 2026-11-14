@@ -10,9 +10,9 @@ none10 none11 none12 none13 none14 none15 none16 none17 shift ctrl comma`.split(
 export const keyIds = Object.fromEntries(matrix.map((name, i) => [name, i]).filter(([name]) => !name.startsWith('none')));
 const key = (name, label, legend = '') => ({ name, label, legend });
 export const layout = {
-  left: [key('esc', 'esc', '↶'), key('pad', 'Scratchpad', 'save'), key('tab', 'tab')],
-  right: [key('on', '⌂on', 'off'), key('doc', 'doc▾', '+page'), key('menu', 'menu', '▤')],
-  modifiers: [key('ctrl', 'ctrl'), key('shift', '⇧shift', 'CAPS'), key('var', 'var', 'sto→'), key('del', 'del', 'clear')],
+  left: [key('esc', 'esc'), key('pad', 'pad', 'save'), key('tab', 'tab')],
+  right: [key('on', '⌂on'), key('doc', 'doc', '+page'), key('menu', 'menu')],
+  modifiers: [key('ctrl', 'ctrl'), key('shift', 'shift', 'CAPS'), key('var', 'var', 'sto→'), key('del', 'del', 'clear')],
   rows: [
     [key('equ', '=', '≠ ≥'), key('trig', 'trig', '?'), key('n7', '7'), key('n8', '8'), key('n9', '9'), key('metrix', '▥', ':='), key('cat', 'book', '∞ β °')],
     [key('pow', '^', 'ⁿ√'), key('squ', 'x²', '√'), key('n4', '4'), key('n5', '5'), key('n6', '6'), key('mult', '×', '"□"'), key('div', '÷')],
@@ -23,7 +23,7 @@ export const layout = {
     [key('ee', 'EE'), ...'ABCDEFG'.split('').map(c => key('a' + c.toLowerCase(), c)), key('punct', '?!')],
     [key('pi', 'π'), ...'HIJKLMN'.split('').map(c => key('a' + c.toLowerCase(), c)), key('flag', '⚑')],
     [key('comma', ','), ...'OPQRSTU'.split('').map(c => key('a' + c.toLowerCase(), c)), key('ret', '↵')],
-    [key('', ''), ...'VWXYZ'.split('').map(c => key('a' + c.toLowerCase(), c)), key('space', '⎵')],
+    [key('', ''), ...'VWXYZ'.split('').map(c => key('a' + c.toLowerCase(), c)), key('space', 'space')],
   ],
 };
 

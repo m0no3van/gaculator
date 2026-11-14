@@ -23,6 +23,7 @@ def archive_source():
                     archive.write(path, path.relative_to(ROOT).as_posix())
         for name in ['tools/build-firebird.py', 'tools/package-firebird.mjs', 'tools/serve.mjs',
                      'tools/test-firebird.mjs', 'tools/test-touchpad.mjs', 'tools/test-keyboard.mjs', 'tools/test-performance.mjs',
+                     'tools/test-input-latency.mjs',
                      'tools/check-delivery.mjs', 'tools/check_docs.py', 'tools/lan-firebird.mjs',
                      'tools/package-pages.py', '.github/workflows/pages.yml', '.github/scripts/check-pages.py',
                      'vite.config.js', 'package.json', 'package-lock.json', 'index.html', 'LICENSE', 'README.md',

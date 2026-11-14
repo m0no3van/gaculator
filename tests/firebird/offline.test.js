@@ -7,7 +7,7 @@ const source = await readFile(new URL('../../src/firebird/service-worker.js', im
 const scope = 'https://calculator.test/app/';
 const prefix = `gaculator-${encodeURIComponent(scope)}-`;
 
-function environment(failInstall = false) {
+function environment(failInstall = false, online = false) {
   const listeners = {}, stores = new Map();
   const caches = {
     async open(name) {
@@ -15,7 +15,10 @@ function environment(failInstall = false) {
       const entries = stores.get(name);
       return {
         async addAll(urls) {
-          for (const url of urls) { entries.set(url, new Response(url)); if (failInstall) throw new Error('offline'); }
+          for (const request of urls) {
+            assert.equal(request.cache, 'reload', 'fresh installation bypasses the browser HTTP cache');
+            const url = request.url; entries.set(url, new Response(url)); if (failInstall) throw new Error('offline');
+          }
         },
         async match(url) { return entries.get(typeof url === 'string' ? url : url.url)?.clone(); },
       };
@@ -26,7 +29,10 @@ function environment(failInstall = false) {
   const self = { registration: { scope }, location: { origin: 'https://calculator.test' },
     clients: { async claim() {} }, addEventListener(type, listener) { listeners[type] = listener; } };
   runInNewContext(`const VERSION='test';const ASSETS=['index.html','vendor/firebird/firebird.wasm','vendor/firebird-device/flash.img.gz'];${source}`,
-    { self, caches, URL, encodeURIComponent, fetch: async () => { throw new Error('Network unavailable'); } });
+    { self, caches, URL, Request, encodeURIComponent, fetch: async (url, options) => {
+      if (!online) throw new Error('Network unavailable');
+      assert.equal(options.cache, 'reload'); return new Response(`fresh:${url}`);
+    } });
   function event(type, fields = {}) {
     let work;
     listeners[type]({ ...fields, waitUntil(promise) { work = promise; }, respondWith(promise) { work = promise; } });
@@ -51,6 +57,15 @@ test('offline precache includes real WASM/NAND, serves navigation without networ
   stores.get(prefix + 'test').delete(scope + 'vendor/firebird-device/flash.img.gz');
   await event('message', { data: 'CHECK', ports: [{ postMessage(value) { report = value; } }] });
   assert.equal(report.ready, false);
+});
+
+test('after explicit cache deletion an already controlling Worker loads fresh HTML instead of a blank page', async () => {
+  const { event, stores } = environment(false, true);
+  await event('install');
+  stores.delete(prefix + 'test');
+  const response = await event('fetch', { request: { method: 'GET', mode: 'navigate', url: scope + 'index.html?pwa-reload=1' } });
+  assert.equal(await response.text(), `fresh:${scope}index.html`);
+  assert.equal(event('fetch', { request: { method: 'HEAD', url: scope + 'sw.js' } }), undefined);
 });
 
 test('incomplete install removes only new cache and retains existing usable version', async () => {

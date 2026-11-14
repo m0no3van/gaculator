@@ -6,17 +6,17 @@
       "size": 0,
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
-    "assets/index-C5EFCvhm.css": {
-      "size": 9892,
-      "sha256": "6665ea7b6fc4ad3682be923b30e5265c567f902830b80a3ebc3cef707bba351e"
+    "assets/index-CrKqqH4e.js": {
+      "size": 88603,
+      "sha256": "ed6b0caad23896eaf5f5bc5944e44ddfa70a71606fccb969361c1c78cf806096"
     },
-    "assets/index-UcYYwayu.js": {
-      "size": 86360,
-      "sha256": "f96cfb376163467b43aedfdd47b9b0eb2125a2f1e51557301412840a0fb957a6"
+    "assets/index-G3ddgvKq.css": {
+      "size": 9203,
+      "sha256": "512e998836c55b4942452376a6175f16836072f624993094f4ec93a064accddf"
     },
-    "assets/worker-CbbyAj5U.js": {
-      "size": 5255,
-      "sha256": "07ed838f4618715b6c7e9363d4173510d4569d784057e92a02d84b1ff04b064b"
+    "assets/worker-W50bPPDV.js": {
+      "size": 5688,
+      "sha256": "0bb37fe5f6cb88fd7c118ab3ed7a4bf63be406c208c3d06296d3b1535e8bb1f2"
     },
     "icon-192.png": {
       "size": 1705,
@@ -32,15 +32,15 @@
     },
     "index.html": {
       "size": 891,
-      "sha256": "d63c2079368176c60de6c463ad9848139a0916fb787f7b4893912d60190f4d73"
+      "sha256": "cfed2fb11e4ca8c2c562948b0a459159e3e2fc38508eecb257b6c89d7f794742"
     },
     "manifest.webmanifest": {
       "size": 470,
       "sha256": "aa8d0d7004381513039cfd647f66c7437803ce67edcafb178fb54a173543c1ff"
     },
     "sw.js": {
-      "size": 2169,
-      "sha256": "00d516b09ef3aa4e5b1bfa4bf1bfa53a8e1b554366584dfc8051dc499d891a21"
+      "size": 2313,
+      "sha256": "f16c29607f8bdeb1b411f06835262a3447d0c5d7076466c163426763a9756c44"
     },
     "vendor/firebird-device/boot1.img.gz": {
       "size": 152104,
@@ -79,8 +79,8 @@
       "sha256": "913013ac5797f151774ccfba0b7424ae79aa9019f453b6954fa7ee50c1895a5c"
     },
     "vendor/firebird/source.zip": {
-      "size": 303959,
-      "sha256": "68769e9d44808150b7a25f3d6c9cdfee45767708c8f81ba9dee6a12b03823bec"
+      "size": 314437,
+      "sha256": "5cb88dc25d590d4ba6d9a6dc13fa572c22e753b4ec844fa36774430393fa3a98"
     }
   }
 }

@@ -5,6 +5,7 @@ import { browserKey } from './keys.js';
 import { openSaves, storedState, validateSave, saveNamespace } from './saves.js';
 import { prepareOffline } from './offline.js';
 import { clearProjectData } from './cleanup.js';
+import { checkReloadAvailable } from './reload.js';
 
 const canvas = ref(), ready = ref(false), error = ref(''), status = ref('正在准备… / Preparing…');
 const offline = ref('');
@@ -26,11 +27,18 @@ function save() {
 }
 function showError(problem) { error.value = problem.message || String(problem); }
 async function saveNow() { try { await save(); } catch (problem) { showError(problem); } }
-async function clearData() {
-  if (!confirm('永久删除此计算器的本机存档和离线缓存？无法撤销。\nPermanently delete this calculator’s local save and offline cache? This cannot be undone.')) return;
+async function clearData(reload = false) {
+  if (preparing.value || starting.value || cleaning.value || cleared.value) return;
+  const question = reload
+    ? '是否重载此 PWA？\n这会永久清空本机存档和缓存，并重新下载应用及约 20 MB 镜像。云端没有你的个人存档备份；此操作无法撤销。\nReload this PWA? Permanently delete local saves/cache and download the app/device again. There is no cloud backup of your saves.'
+    : '永久删除此计算器的本机存档和离线缓存？无法撤销。\nPermanently delete this calculator’s local save and offline cache? This cannot be undone.';
+  if (!confirm(question)) return;
   cleaning.value = true;
+  let stopped = false;
   try {
+    if (reload) await checkReloadAvailable(location.href);
     const remove = async () => {
+      stopped = true;
       clearInterval(autosave); ready.value = false;
       worker?.terminate(); worker = null;
       for (const entry of pending.values()) { clearTimeout(entry.timeout); entry.reject(new Error('清理已停止保存 / Cleanup stopped saving')); }
@@ -48,7 +56,15 @@ async function clearData() {
       await remove();
     });
     else throw new Error('需要支持 Web Locks 的安全浏览器 / Secure browser with Web Locks required');
-  } catch (problem) { showError(problem); }
+    if (reload) {
+      const target = new URL('index.html', location.href);
+      target.searchParams.set('pwa-reload', Date.now());
+      location.replace(target.href);
+    }
+  } catch (problem) {
+    if (reload && !stopped) alert(`重载失败，已保留本机数据。请联网重试。\nReload failed; local data retained. Reconnect and retry.\n${problem.message}`);
+    else showError(problem);
+  }
   finally { cleaning.value = false; }
 }
 async function visibility() {
@@ -77,7 +93,7 @@ async function start() {
   worker.onerror = event => crashed(event.message || 'Emulator Worker crashed; previous save retained.');
   worker.onmessage = async ({ data }) => {
     if (data.type === 'frame') {
-      canvas.value.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(data.bytes.buffer), 320, 240), 0, 0);
+      canvas.value.getContext('2d', { alpha: false }).putImageData(new ImageData(new Uint8ClampedArray(data.bytes.buffer), 320, data.height), 0, data.y);
       post('frame-drawn');
     }
     else if (data.type === 'status') status.value = data.message;
@@ -136,7 +152,7 @@ onBeforeUnmount(() => {
       </div>
       <p class="sr-only" role="status">{{ status }} {{ offline }}</p>
     </section>
-    <Keypad :inert="!ready" @tap="tap" @touch="value => post('touch', value)"/>
+    <Keypad :inert="!ready" @tap="tap" @touch="value => post('touch', value)" @reload-request="clearData(true)"/>
     <dialog ref="settings" class="settings-dialog" aria-labelledby="settings-title" @cancel="event => { if (cleaning) event.preventDefault(); }">
       <h2 id="settings-title">缓存与清理 / Cache and cleanup</h2>
       <p role="status">{{ cleared ? '本项目缓存与存档已清除 / Project cache and save removed' : offline }}</p>
@@ -146,9 +162,12 @@ onBeforeUnmount(() => {
       <p>Before uninstalling, clear this project’s cache, save and offline service here inside the Home Screen app. Safari may use separate storage. Removing an icon does not guarantee removal of Safari data.</p>
       <p>要清理 Safari 的副本：设置 → App → Safari → 高级 → 网站数据，删除对应站点。此操作可能同时删除同域名其他网页的数据。</p>
       <p>For Safari’s copy: Settings → Apps → Safari → Advanced → Website Data; remove the site. This may also clear other pages on the same domain.</p>
+      <p>长按 ON 五秒可请求重载；确认后清空存档与缓存，再联网下载。也可使用下方按钮。</p>
+      <p>Hold ON for five seconds to request a fresh download after clearing local data. Confirmation is required; the button below does the same.</p>
       <p v-if="error" role="alert">{{ error }}</p>
       <div class="settings-actions">
-        <button type="button" :disabled="preparing || starting || cleaning || cleared" @click="clearData">{{ cleaning ? '清理中… / Clearing…' : '清除本机数据 / Clear local data' }}</button>
+        <button type="button" :disabled="preparing || starting || cleaning || cleared" @click="clearData(false)">{{ cleaning ? '清理中… / Clearing…' : '清除本机数据 / Clear local data' }}</button>
+        <button type="button" :disabled="preparing || starting || cleaning || cleared" @click="clearData(true)">重载此 PWA / Reload PWA</button>
         <button type="button" autofocus :disabled="cleaning" @click="settings.close()">关闭 / Close</button>
       </div>
     </dialog>

@@ -5,8 +5,16 @@ let core, pixels, timer, paused = false, failed = false, taps = [], activeTap, r
 let identity;
 let touchpad;
 let clockTime = 0, clockTicks = 0, lastFrameTime = -Infinity, framePending = false;
+let interactiveUntil = 0, lastPixels;
 const send = (type, fields = {}, transfer = []) => postMessage({ type, ...fields }, transfer);
 function resetClock() { clockTime = performance.now(); clockTicks = core._fb_ticks(); }
+function inputArrived() {
+  interactiveUntil = performance.now() + 150;
+  lastFrameTime = -Infinity;
+  clearTimeout(timer);
+  const ahead = (core._fb_ticks() - clockTicks) * 10 - (performance.now() - clockTime);
+  timer = setTimeout(step, Math.max(0, ahead - 20));
+}
 async function checked(url, hash) {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`Cannot load ${new URL(url).pathname} (${response.status})`);
@@ -61,15 +69,27 @@ function step() {
     if (!core._fb_step(8)) throw new Error('The emulated system stopped. Reopen to restore the last save.');
     touchpad.flush();
     const time = performance.now();
-    if (!framePending && time - lastFrameTime >= 1000 / 30) {
+    if (!framePending && (time < interactiveUntil || time - lastFrameTime >= 1000 / 30)) {
       core._fb_paint(pixels);
-      const frame = core.HEAPU8.slice(pixels, pixels + 320 * 240 * 4);
-      framePending = true; lastFrameTime = time;
-      send('frame', { bytes: frame }, [frame.buffer]);
+      const current = new Uint32Array(core.HEAPU8.buffer, pixels, 320 * 240);
+      let first = 0, last = current.length - 1;
+      if (lastPixels) {
+        while (first < current.length && current[first] === lastPixels[first]) first++;
+        while (last > first && current[last] === lastPixels[last]) last--;
+      }
+      lastFrameTime = time;
+      if (first < current.length) {
+        const y = Math.floor(first / 320), height = Math.floor(last / 320) - y + 1;
+        const start = y * 320, end = (y + height) * 320;
+        if (lastPixels) lastPixels.set(current.subarray(start, end), start); else lastPixels = current.slice();
+        const frame = core.HEAPU8.slice(pixels + start * 4, pixels + end * 4);
+        framePending = true;
+        send('frame', { bytes: frame, y, height }, [frame.buffer]);
+      }
     }
     // Yield promptly when CPU-bound; sleep only when the 100 Hz guest clock is ahead.
     const ahead = (core._fb_ticks() - clockTicks) * 10 - (time - clockTime);
-    timer = setTimeout(step, Math.max(0, Math.min(16, ahead)));
+    timer = setTimeout(step, Math.max(0, ahead));
   } catch (error) { fail(error); }
 }
 function fail(error) { failed = true; clearTimeout(timer); send('error', { message: error.message || String(error) }); }
@@ -106,8 +126,8 @@ onmessage = async ({ data }) => {
     if (data.type === 'frame-drawn') { framePending = false; return; }
     if (!core || failed) throw new Error('Emulator is unavailable; the last save has been retained.');
     if (data.type === 'tap' && (Number.isInteger(keyIds[data.name]) || directions[data.name])) {
-      if (taps.length < 64) taps.push({ name: data.name, ctrl: !!data.ctrl, shift: !!data.shift });
-    } else if (data.type === 'touch') touchpad.receive(data);
+      if (taps.length < 64) { taps.push({ name: data.name, ctrl: !!data.ctrl, shift: !!data.shift }); inputArrived(); }
+    } else if (data.type === 'touch') { touchpad.receive(data); inputArrived(); }
     else if (data.type === 'release') release();
     else if (data.type === 'save') {
       if (paused) snapshot(data.id);

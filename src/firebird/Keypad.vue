@@ -4,7 +4,7 @@ import { layout, directions } from './keys.js';
 import Key from './Key.vue';
 import { createTouchpadGesture } from './touchpad.js';
 import { vibrateFeedback } from './haptics.js';
-const emit = defineEmits(['tap', 'touch']);
+const emit = defineEmits(['tap', 'touch', 'reload-request']);
 const modifiers = reactive({ ctrl: false, shift: false });
 const pad = ref();
 const touching = ref(false), point = reactive({ x: 0.5, y: 0.5 });
@@ -32,15 +32,11 @@ onBeforeUnmount(() => {
     <section class="handheld-keyboard">
       <div class="hh-navigation">
         <div v-for="side in ['left', 'right']" :key="side" :class="`hh-nav-${side}`">
-          <Key v-for="item in layout[side]" :key="item.name" :item="item" @press="press"/>
+          <Key v-for="item in layout[side]" :key="item.name" :item="item" @press="press" @reload-request="emit('reload-request')"/>
         </div>
         <div ref="pad" class="hh-touchpad"
           @pointerdown="down" @pointermove="gesture.move" @pointerup="gesture.end" @pointercancel="gesture.cancel"
           @lostpointercapture="gesture.cancel" @contextmenu.prevent>
-          <span class="hh-pad-mark hh-pad-mark-up" aria-hidden="true">▴</span>
-          <span class="hh-pad-mark hh-pad-mark-right" aria-hidden="true">▸</span>
-          <span class="hh-pad-mark hh-pad-mark-down" aria-hidden="true">▾</span>
-          <span class="hh-pad-mark hh-pad-mark-left" aria-hidden="true">◂</span>
           <span v-if="touching" class="hh-pad-contact" :style="{ left: `${point.x * 100}%`, top: `${point.y * 100}%` }" aria-hidden="true"></span>
           <button v-for="(point, direction) in directions" :key="direction" type="button" :class="`hh-pad-${direction}`"
             :aria-label="direction" @click="event => { if (event.detail === 0) press(direction); }">

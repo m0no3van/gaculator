@@ -3,7 +3,7 @@ const cacheName = `${cachePrefix}${VERSION}`;
 const absoluteAssets = ASSETS.map(path => new URL(path, self.registration.scope).href);
 self.addEventListener('install', event => {
   event.waitUntil((async () => {
-    try { await (await caches.open(cacheName)).addAll(absoluteAssets); }
+    try { await (await caches.open(cacheName)).addAll(absoluteAssets.map(url => new Request(url, { cache: 'reload' }))); }
     catch (error) { await caches.delete(cacheName); throw error; }
   })());
 });
@@ -17,7 +17,10 @@ self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
   if (event.request.method !== 'GET' || url.origin !== self.location.origin || !url.href.startsWith(self.registration.scope)) return;
   if (event.request.mode === 'navigate') {
-    event.respondWith((async () => (await caches.open(cacheName)).match(new URL('index.html', self.registration.scope).href))());
+    event.respondWith((async () => {
+      const index = new URL('index.html', self.registration.scope).href;
+      return (await (await caches.open(cacheName)).match(index)) || fetch(index, { cache: 'reload' });
+    })());
   } else if (absoluteAssets.includes(url.href)) {
     event.respondWith((async () => (await (await caches.open(cacheName)).match(url.href)) || fetch(event.request))());
   }
