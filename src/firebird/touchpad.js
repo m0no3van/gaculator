@@ -15,7 +15,7 @@ export function createTouchpadGesture(send, tap) {
   return {
     get pointerId() { return gesture?.id; },
     start(event, rect) {
-      if (gesture || event.button !== 0 || event.isPrimary === false || rect.width <= 0 || rect.height <= 0
+      if (gesture || event.button !== 0 || (event.isPrimary === false && event.pointerType !== 'touch') || rect.width <= 0 || rect.height <= 0
         || event.clientX < rect.left || event.clientX > rect.left + rect.width
         || event.clientY < rect.top || event.clientY > rect.top + rect.height) return false;
       gesture = { id: event.pointerId, rect, startX: event.clientX, startY: event.clientY, moved: false };

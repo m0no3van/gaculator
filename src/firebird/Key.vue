@@ -29,7 +29,7 @@ const otherPointer = event => {
 };
 const otherKey = () => { if (hold.pending) stopHold(); };
 function down(event) {
-  if (event.button !== 0 || event.isPrimary === false || !inside(event)) {
+  if (event.button !== 0 || (event.isPrimary === false && event.pointerType !== 'touch') || !inside(event)) {
     if (nativeSwitch) { nativePress = false; event.preventDefault(); }
     return;
   }

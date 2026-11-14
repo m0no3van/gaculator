@@ -21,12 +21,18 @@ test('pointerdown types immediately and consumes a subsequent zero-detail click'
   }
 });
 
-test('fast repeated taps are not debounced or dropped, and non-primary pointers do not type', () => {
+test('fast repeated taps are not debounced or dropped, and secondary mouse/pen pointers do not type', () => {
   const { letters, input } = fixture();
   for (let i = 0; i < 12; i++) { input.pointerDown(pointer); input.fallback(); }
   assert.equal(letters.length, 12);
   input.pointerDown({ button: 2 }); input.pointerDown({ ...pointer, isPrimary: false });
   assert.equal(letters.length, 12);
+});
+
+test('a second touching finger types immediately without waiting for the first finger release', () => {
+  const { letters, input } = fixture();
+  input.pointerDown({ ...pointer, pointerId: 2, pointerType: 'touch', isPrimary: false });
+  input.fallback({ detail: 0 }); assert.deepEqual(letters, ['a']);
 });
 
 test('a physical click retargeted to another key cannot activate its fallback', () => {
@@ -103,11 +109,27 @@ test('twelve rapid DEL presses capture their pointer and never activate the book
   assert.deepEqual(del.captures, Array(12).fill(1));
 });
 
-test('keys reject starts outside measured button boxes and secondary touch', () => {
+test('keys reject starts outside measured button boxes and secondary non-touch pointers', () => {
   const book = component('cat', { left: 40, top: 40, right: 80, bottom: 70 });
   for (const point of [{ clientX: 60, clientY: 20 }, { clientX: 39, clientY: 50 }, { clientX: 81, clientY: 50 }, { clientX: 60, clientY: 71 }, { isPrimary: false }]) book.down(point);
   assert.deepEqual(book.events, []); assert.deepEqual(book.captures, []);
   book.down(); assert.deepEqual(book.events, [['press', 'cat']]);
+});
+
+test('overlapping touch fingers activate different keys once and ON still rejects a secondary hold', () => {
+  for (const native of [false, true]) {
+    const first = component('n1', undefined, native), second = component('n2', undefined, native);
+    first.down({ pointerType: 'touch' });
+    second.down({ pointerId: 2, pointerType: 'touch', isPrimary: false });
+    assert.deepEqual(first.events, [['press', 'n1']]); assert.deepEqual(second.events, [['press', 'n2']]);
+    first.up(); second.up({ pointerId: 2 });
+    if (native) { first.labelClick(); second.labelClick(); }
+    first.click({ detail: 0 }); second.click({ detail: 0 });
+    assert.equal(first.events.length, 1); assert.equal(second.events.length, 1);
+    const on = component('on', undefined, native);
+    on.down({ pointerId: 2, pointerType: 'touch', isPrimary: false }); on.advance(6000); on.up({ pointerId: 2 });
+    assert.deepEqual(on.events, []);
+  }
 });
 
 test('dragging DEL over book, cancellation and cross-key release never send a book press', () => {

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { gunzipSync } from 'node:zlib';
 import { runInNewContext } from 'node:vm';
+import { MessageChannel } from 'node:worker_threads';
 import createFirebird from '../public/vendor/firebird/firebird.mjs';
 import { keyIds, directions } from '../src/firebird/keys.js';
 import { createTouchpadInput } from '../src/firebird/touchpad.js';
@@ -32,7 +33,7 @@ core._fb_paint = pointer => {
   if (trial) trial.paintMilliseconds += performance.now() - started;
 };
 const displayed = new Uint8Array(320 * 240 * 4);
-const context = { keyIds, directions, createTouchpadInput, performance, Date, Uint8Array,
+const context = { keyIds, directions, createTouchpadInput, performance, Date, Uint8Array, MessageChannel,
   setTimeout(callback, delay) { return setTimeout(callback, Math.max(4, delay)); }, clearTimeout,
   postMessage(message) {
     if (message.type === 'error') throw new Error(message.message);
@@ -57,7 +58,7 @@ const context = { keyIds, directions, createTouchpadInput, performance, Date, Ui
     queueMicrotask(() => context.onmessage({ data: { type: 'frame-drawn' } }));
   },
 };
-runInNewContext(source + '\nglobalThis.configure = (value, pointer) => { core=value; pixels=pointer; touchpad=createTouchpadInput(core); resetClock(); }; globalThis.tick=step;', context);
+runInNewContext(source + '\nglobalThis.configure = (value, pointer) => { core=value; pixels=pointer; touchpad=createTouchpadInput(core); resetClock(); }; globalThis.tick=step; globalThis.closeScheduler = () => { if (typeof wakeup !== "undefined" && wakeup) { wakeup.port1.close(); wakeup.port2.close(); } };', context);
 context.configure(core, pixels); context.tick();
 const samples = [];
 const scenarios = [
@@ -89,7 +90,7 @@ try {
     }
     finally { clearTimeout(timeout); }
   }
-} finally { await context.onmessage({ data: { type: 'pause', value: true } }); }
+} finally { await context.onmessage({ data: { type: 'pause', value: true } }); context.closeScheduler(); }
 assert.equal(samples.length, scenarios.length);
 const snapshotStarted = performance.now();
 assert.equal(core._fb_save(), 1);
@@ -97,7 +98,7 @@ const snapshotSaved = performance.now(), snapshot = core.FS.readFile('state.snap
 const snapshotRead = performance.now(); core.FS.unlink('state.snap');
 const sorted = samples.map(sample => sample.milliseconds).sort((a, b) => a - b);
 const middle = Math.floor(sorted.length / 2);
-const report = { environment: `Node ${process.version} ${process.platform}/${process.arch}; nested timers clamped to 4 ms; immediate main-thread acknowledgement`,
+const report = { environment: `Node ${process.version} ${process.platform}/${process.arch}; nested timers clamped to 4 ms; MessageChannel available; immediate main-thread acknowledgement`,
   workerPath, metric: 'Worker input-message arrival to first frame with changed math glyphs/template',
   medianMilliseconds: Number(((sorted[middle - 1] + sorted[middle]) / 2).toFixed(2)), worstMilliseconds: sorted.at(-1), postedFrames, postedBytes, samples,
   synchronousSnapshotMilliseconds: Number((snapshotSaved - snapshotStarted).toFixed(2)),

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { gunzipSync } from 'node:zlib';
 import { runInNewContext } from 'node:vm';
+import { MessageChannel } from 'node:worker_threads';
 import createFirebird from '../public/vendor/firebird/firebird.mjs';
 import { keyIds, directions } from '../src/firebird/keys.js';
 import { createTouchpadInput } from '../src/firebird/touchpad.js';
@@ -26,23 +27,24 @@ const measured = { ...core, _fb_key(id, down) {
   const start = performance.now(); const result = core._fb_step(budget); const duration = performance.now() - start;
   steps++; cpuMilliseconds += duration; maxStepMilliseconds = Math.max(maxStepMilliseconds, duration); return result;
 } };
-const context = { keyIds, directions, createTouchpadInput, performance, Date, Uint8Array,
+const context = { keyIds, directions, createTouchpadInput, performance, Date, Uint8Array, MessageChannel,
   setTimeout(callback, delay) { return setTimeout(callback, Math.max(4, delay)); }, clearTimeout,
   postMessage(message) {
     if (message.type === 'error') throw new Error(message.message);
     if (message.type === 'frame') { frames++; frameBytes += message.bytes.byteLength; queueMicrotask(() => context.onmessage({ data: { type: 'frame-drawn' } })); }
   },
 };
-runInNewContext(source + '\nglobalThis.configure = (value, pointer) => { core=value; pixels=pointer; touchpad=createTouchpadInput(core); if (typeof resetClock === "function") resetClock(); }; globalThis.tick=step;', context);
+runInNewContext(source + '\nglobalThis.configure = (value, pointer) => { core=value; pixels=pointer; touchpad=createTouchpadInput(core); if (typeof resetClock === "function") resetClock(); }; globalThis.tick=step; globalThis.closeScheduler = () => { if (typeof wakeup !== "undefined" && wakeup) { wakeup.port1.close(); wakeup.port2.close(); } };', context);
 context.configure(measured, pixels);
 context.tick();
 for (const name of '1234567890123456') await context.onmessage({ data: { type: 'tap', name: 'n' + name } });
 await new Promise(resolve => setTimeout(resolve, 6000));
 await context.onmessage({ data: { type: 'pause', value: true } });
+context.closeScheduler();
 const elapsed = performance.now() - started;
 assert.equal(presses, 16); assert.equal(releases, 16, 'queued input drains without dropping keys');
 assert.ok(maxStepMilliseconds < 250, 'CPU batches remain bounded');
-const report = { environment: `Node ${process.version} ${process.platform}/${process.arch}; nested timers clamped to 4 ms`,
+const report = { environment: `Node ${process.version} ${process.platform}/${process.arch}; nested timers clamped to 4 ms; MessageChannel available`,
   workerPath, wallMilliseconds: Math.round(elapsed), guestSpeed: Number(((core._fb_ticks() - startTicks) * 10 / elapsed).toFixed(3)),
   queueMilliseconds: Math.round(queueMilliseconds), presses, releases, frames, frameBytes, steps,
   cpuMilliseconds: Math.round(cpuMilliseconds), maxStepMilliseconds: Number(maxStepMilliseconds.toFixed(2)), realIPhone: false };

@@ -134,7 +134,54 @@ test('rapid input wakes remain bounded by the guest-clock lead', async () => {
   context.configure(core);
   for (let i = 0; i < 20; i++) await context.onmessage({ data: { type: 'tap', name: 'n1' } });
   assert.equal(steps, 2, 'message bursts cannot keep running the guest ahead of real time');
-  assert.equal(delay, 20);
+  assert.equal(delay, 5, '20 guest milliseconds of lead are five wall milliseconds during interaction');
+});
+
+test('interaction accelerates guest time then returns to idle pacing without catch-up or a long sleep', async () => {
+  const source = (await readFile(new URL('../../src/firebird/worker.js', import.meta.url), 'utf8')).replace(/^import .+;\r?\n/gm, '');
+  let ticks = 0, time = 0, delay;
+  const core = { HEAPU8: new Uint8Array(320 * 240 * 4), _fb_ticks: () => ticks,
+    _fb_touch() {}, _fb_key() {}, _fb_release() {}, _fb_paint() {},
+    _fb_step() { ticks += 2; return 1; } };
+  const context = { keyIds, directions, createTouchpadInput, performance: { now: () => time }, Date, Uint8Array,
+    postMessage() {}, setTimeout(callback, value) { delay = value; }, clearTimeout() {} };
+  runInNewContext(source + '\nglobalThis.configure = value => { core=value; pixels=0; touchpad=createTouchpadInput(core); resetClock(); }; globalThis.tick=step; globalThis.rate=()=>clockRate;', context);
+  context.configure(core);
+  await context.onmessage({ data: { type: 'tap', name: 'n1' } });
+  assert.equal(context.rate(), 4); assert.equal(delay, 5);
+  time = 5; context.tick(); time = 10; context.tick();
+  assert.equal(context.rate(), 4); assert.equal(delay, 5);
+  time = 200; context.tick();
+  assert.equal(context.rate(), 1); assert.equal(delay, 0, 'changing rate rebases the clock');
+  context.tick(); assert.equal(delay, 20, 'idle runs at 1x');
+  await context.onmessage({ data: { type: 'tap', name: 'n2' } });
+  await context.onmessage({ data: { type: 'pause', value: true } });
+  time = 50000; await context.onmessage({ data: { type: 'pause', value: false } });
+  assert.equal(context.rate(), 1); assert.equal(delay, 20, 'resume discards background and turbo time');
+});
+
+test('CPU-bound message tasks yield without a timer clamp and cancelled tasks cannot run twice', async () => {
+  const source = (await readFile(new URL('../../src/firebird/worker.js', import.meta.url), 'utf8')).replace(/^import .+;\r?\n/gm, '');
+  let ticks = 0, time = 0, steps = 0, timed = 0, channel;
+  const tasks = [];
+  class MessageChannel {
+    constructor() { channel = this; this.port1 = {}; this.port2 = { postMessage: value => tasks.push(value) }; }
+  }
+  const core = { HEAPU8: new Uint8Array(320 * 240 * 4), _fb_ticks: () => ticks,
+    _fb_touch() {}, _fb_key() {}, _fb_release() {}, _fb_paint() {},
+    _fb_step() { steps++; ticks += 2; time += 8; return 1; } };
+  const context = { keyIds, directions, createTouchpadInput, MessageChannel, performance: { now: () => time }, Date, Uint8Array,
+    postMessage() {}, setTimeout() { timed++; }, clearTimeout() {} };
+  runInNewContext(source + '\nglobalThis.configure = value => { core=value; pixels=0; touchpad=createTouchpadInput(core); resetClock(); };', context);
+  context.configure(core);
+  await context.onmessage({ data: { type: 'tap', name: 'n1' } });
+  assert.equal(timed, 0); assert.equal(tasks.length, 1);
+  await context.onmessage({ data: { type: 'tap', name: 'n2' } });
+  assert.equal(steps, 2);
+  channel.port1.onmessage({ data: tasks.shift() }); assert.equal(steps, 2, 'new input invalidates the old message task');
+  channel.port1.onmessage({ data: tasks.shift() }); assert.equal(steps, 3, 'current task runs one bounded CPU batch');
+  await context.onmessage({ data: { type: 'pause', value: true } });
+  channel.port1.onmessage({ data: tasks.shift() }); assert.equal(steps, 3, 'pause invalidates pending work');
 });
 
 test('successful and failed snapshot work cannot become guest-clock catch-up debt', async () => {

@@ -36,6 +36,16 @@ test('default raw tap still clicks once and invalid starts never send contact', 
   assert.equal(sent.at(-1).contact, false);
 });
 
+test('touchpad accepts a second finger when the primary finger is on the keyboard, retaining one gesture owner', () => {
+  const sent = []; let taps = 0;
+  const gesture = createTouchpadGesture(value => sent.push(value), () => taps++);
+  const second = { ...pointer(100, 80, 2), pointerType: 'touch', isPrimary: false };
+  assert.equal(gesture.start(second, rect), true);
+  assert.equal(gesture.start({ ...second, pointerId: 3 }, rect), false);
+  gesture.end(pointer(100, 80)); assert.equal(taps, 0);
+  gesture.end(second); assert.equal(taps, 1); assert.equal(sent.at(-1).contact, false);
+});
+
 test('fast full-pad swipes drain bounded guest-clock deltas before release; taps survive a slow guest', () => {
   let ticks = 0; const calls = [];
   const input = createTouchpadInput({ _fb_ticks: () => ticks, _fb_touch: (...args) => calls.push(args) });

@@ -6,15 +6,29 @@ let identity;
 let touchpad;
 let clockTime = 0, clockTicks = 0, lastFrameTime = -Infinity, framePending = false;
 let interactiveUntil = 0, lastPixels;
+let clockRate = 1, scheduleVersion = 0;
+const wakeup = typeof MessageChannel === 'function' ? new MessageChannel() : null;
+if (wakeup) wakeup.port1.onmessage = ({ data }) => { if (data === scheduleVersion) step(); };
 const send = (type, fields = {}, transfer = []) => postMessage({ type, ...fields }, transfer);
 function resetClock() { clockTime = performance.now(); clockTicks = core._fb_ticks(); }
+function setClockRate(rate) {
+  if (rate !== clockRate) { resetClock(); clockRate = rate; }
+}
+function cancelStep() { clearTimeout(timer); ++scheduleVersion; }
+function scheduleStep(delay) {
+  const version = ++scheduleVersion;
+  // Message tasks yield to input without the nested timer's 4 ms minimum wait.
+  if (delay <= 0 && wakeup) wakeup.port2.postMessage(version);
+  else timer = setTimeout(step, Math.max(0, delay));
+}
 function inputArrived() {
   interactiveUntil = performance.now() + 150;
+  setClockRate(4);
   lastFrameTime = -Infinity;
-  clearTimeout(timer);
-  const ahead = (core._fb_ticks() - clockTicks) * 10 - (performance.now() - clockTime);
+  cancelStep();
+  const ahead = (core._fb_ticks() - clockTicks) * 10 - (performance.now() - clockTime) * clockRate;
   if (ahead <= 20) step();
-  else timer = setTimeout(step, ahead - 20);
+  else scheduleStep((ahead - 20) / clockRate);
 }
 async function checked(url, hash) {
   const response = await fetch(url);
@@ -91,12 +105,13 @@ function step() {
         send('frame', { bytes: frame, y, height }, [frame.buffer]);
       }
     }
-    // Yield promptly when CPU-bound; sleep only when the 100 Hz guest clock is ahead.
-    const ahead = (core._fb_ticks() - clockTicks) * 10 - (time - clockTime);
-    timer = setTimeout(step, Math.max(0, ahead));
+    // Run up to 4x during interaction, retaining calibrated guest-clock key pulses.
+    setClockRate(time < interactiveUntil ? 4 : 1);
+    const ahead = (core._fb_ticks() - clockTicks) * 10 / clockRate - (performance.now() - clockTime);
+    scheduleStep(ahead);
   } catch (error) { fail(error); }
 }
-function fail(error) { failed = true; clearTimeout(timer); send('error', { message: error.message || String(error) }); }
+function fail(error) { failed = true; cancelStep(); send('error', { message: error.message || String(error) }); }
 async function boot({ base, device, save }) {
   identity = device.identity;
   send('status', { message: '载入本机模拟器和镜像… / Loading local emulator and device…' });
@@ -137,7 +152,8 @@ onmessage = async ({ data }) => {
       if (paused) snapshot(data.id);
       else taps.push({ save: true, id: data.id });
     } else if (data.type === 'pause') {
-      release(); paused = !!data.value; clearTimeout(timer); if (!paused) { resetClock(); step(); }
+      release(); paused = !!data.value; cancelStep();
+      if (!paused) { interactiveUntil = 0; clockRate = 1; resetClock(); step(); }
     }
   } catch (error) {
     if (data.type === 'save') send('save-error', { id: data.id, message: error.message });

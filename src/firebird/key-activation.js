@@ -9,7 +9,7 @@ export function createKeyActivation(activate, timers = globalThis) {
   return {
     markPointer() { timers.clearTimeout(cleanup); pointerHandled = true; },
     pointerDown(event) {
-      if (event.button !== 0 || event.isPrimary === false) return;
+      if (event.button !== 0 || (event.isPrimary === false && event.pointerType !== 'touch')) return;
       timers.clearTimeout(cleanup); pointerHandled = true;
       activate();
     },

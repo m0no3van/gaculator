@@ -77,10 +77,10 @@ npm run serve
 npm run check:delivery -- http://127.0.0.1:4173/
 ```
 
-已验证真实核心启动、运算输入、快照恢复、键盘组合、图形触控与本地静态分发。三轮桌面配对测试、每版 42 个样本中，最近一轮优化将 Worker 输入到数学变化帧的中位数从 **49.21 ms 降到 41.21 ms**，约降低 **16.3%**；这不包含触摸事件、Canvas 合成和物理屏幕刷新，也不意味着所有功能都更快。
+已验证真实核心启动、运算输入、快照恢复、键盘组合、图形触控与本地静态分发。最近三轮桌面配对测试、每版 42 个样本中，交互短时加速与任务调度优化将 Worker 输入到数学变化帧的中位数从 **48.59 ms 降到 25.46 ms**，约降低 **47.6%**；16 键排队清空约 **1022 → 403 ms**。双指交替按键不再忽略第二根触摸手指。测量不包含触摸事件、Canvas 合成和物理屏幕刷新，也不意味着所有功能都更快。
 
 - WASM 内存约 **331 MB**，初始化峰值更高；桌面表现不能直接推算为手机表现。
-- 同步快照压缩仍可能阻塞 Worker 约 **1.4–2.1 秒**。
+- 同步快照压缩仍可能阻塞 Worker；本轮桌面样本约 **2.5–2.8 秒**。
 - 尚未完成真实 iPhone 的视觉、震感、离线冷启动与长时间闲置恢复验收；浏览器触觉能力因平台而异。
 - 未提供备份导入或跨核心版本快照迁移；清除网站数据或浏览器回收存储可能丢失本机存档。
 - 当前对象为 **CX CAS 4.5.2.8**；CX II / 6.4、全部数学/文档/USB 功能及 OS 内部屏幕阅读器支持未验收。
@@ -166,10 +166,10 @@ npm run serve
 npm run check:delivery -- http://127.0.0.1:4173/
 ```
 
-Checks cover actual-core boot, calculation input, snapshot restoration, keyboard chords, graph touch input and local static delivery. In three paired desktop runs with 42 samples per version, the latest optimization reduced median Worker-input-to-changed-math-frame latency from **49.21 ms to 41.21 ms**, about **16.3%**. This excludes touch dispatch, Canvas composition and physical display refresh, and does not establish that every function is faster.
+Checks cover actual-core boot, calculation input, snapshot restoration, keyboard chords, graph touch input and local static delivery. In the latest three paired desktop runs with 42 samples per version, temporary interaction acceleration and task scheduling reduced median Worker-input-to-changed-math-frame latency from **48.59 ms to 25.46 ms**, about **47.6%**; a 16-key queue drained in about **1022 → 403 ms**. Alternating touch fingers no longer loses the secondary finger's key press. Measurements exclude touch dispatch, Canvas composition and physical display refresh, and do not establish that every function is faster.
 
 - WASM memory is about **331 MB**, with a higher initialization peak. Desktop results do not establish phone performance.
-- Synchronous snapshot compression can still block the Worker for about **1.4–2.1 seconds**.
+- Synchronous snapshot compression can still block the Worker; this desktop round measured about **2.5–2.8 seconds**.
 - Real iPhone visuals, haptics, offline cold startup and sustained idle wake remain unaccepted. Browser haptic capabilities vary by platform.
 - Backup import and cross-core snapshot migration are unavailable. Clearing website data or browser storage eviction can lose local saves.
 - The current target is **CX CAS 4.5.2.8**. CX II / 6.4, exhaustive math/document/USB coverage and screen-reader access inside the emulated OS remain unaccepted.
